@@ -16,7 +16,7 @@ from external_asset_ism_ismc_generation_tool.local_data_handler.local_data_handl
 from external_asset_ism_ismc_generation_tool.text_data_parser.vtt_to_cmft_converter import VttToCmftConverter
 from external_asset_ism_ismc_generation_tool.text_data_parser.model.conversion_summary import ConversionSummary, ProcessingSummary, ManifestResult
 
-def convert_vtt_to_cmft(settings: dict) -> ConversionSummary:
+def convert_vtt_to_cmft(settings: dict, use_local: bool = False) -> ConversionSummary:
     """
     Convert WebVTT files found in the Azure container to CMFT files.
     This must be called before generate_manifests() so that the CMFT files
@@ -24,6 +24,7 @@ def convert_vtt_to_cmft(settings: dict) -> ConversionSummary:
     
     Args:
         settings: Configuration settings including Azure connection info
+        use_local: Whether to use local directory mode
         
     Returns:
         ConversionSummary with results

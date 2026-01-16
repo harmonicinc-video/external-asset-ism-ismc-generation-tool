@@ -1,3 +1,5 @@
+import os
+
 from external_asset_ism_ismc_generation_tool.common.common import Common
 from external_asset_ism_ismc_generation_tool.common.logger.logger import Logger
 from external_asset_ism_ismc_generation_tool.media_data_parser.media_data_parser import MediaDataParser
@@ -9,6 +11,8 @@ from external_asset_ism_ismc_generation_tool.settings_parser.cli_arguments_parse
 from external_asset_ism_ismc_generation_tool.settings_parser.config_file_parser import ConfigFileParser
 from external_asset_ism_ismc_generation_tool.azure_client.azure_blob_service_client import AzureBlobServiceClient
 from external_asset_ism_ismc_generation_tool.blob_data_handler.model.blob_media_data import BlobMediaData
+from external_asset_ism_ismc_generation_tool.local_file_client.local_file_service_client import LocalFileServiceClient
+from external_asset_ism_ismc_generation_tool.local_data_handler.local_data_handler import LocalDataHandler
 from external_asset_ism_ismc_generation_tool.text_data_parser.vtt_to_cmft_converter import VttToCmftConverter
 from external_asset_ism_ismc_generation_tool.text_data_parser.model.conversion_summary import ConversionSummary, ProcessingSummary, ManifestResult
 
@@ -29,11 +33,15 @@ def convert_vtt_to_cmft(settings: dict) -> ConversionSummary:
     try:
         logger.info("Starting VTT to CMFT conversion process")
         
-        az_blob_service_client: AzureBlobServiceClient = AzureBlobServiceClient(settings)
-        
-        # Convert all VTT files in the container to CMFT
-        summary = VttToCmftConverter.convert_vtt_files_in_container(az_blob_service_client)
-        
+        if use_local:
+            logger.info("Using local directory mode")
+            local_file_service_client: LocalFileServiceClient = LocalFileServiceClient(settings)
+            summary = VttToCmftConverter.convert_vtt_files_in_container(local_file_service_client)
+        else:
+            logger.info("Using Azure mode")
+            az_blob_service_client: AzureBlobServiceClient = AzureBlobServiceClient(settings)                # Convert all VTT files in the container to CMFT
+            summary = VttToCmftConverter.convert_vtt_files_in_container(az_blob_service_client)
+
         if summary.total > 0:
             logger.info(f"VTT conversion completed: {summary.successful}/{summary.total} successful")
         else:
@@ -46,7 +54,7 @@ def convert_vtt_to_cmft(settings: dict) -> ConversionSummary:
         # Return empty summary on error
         return ConversionSummary()
 
-def generate_manifests(settings: dict) -> ManifestResult:
+def generate_manifests_azure_use(settings: dict) -> ManifestResult:
     """
     Generate and upload server and client manifests (.ism and .ismc) to the Azure container.
     
@@ -105,14 +113,63 @@ def generate_manifests(settings: dict) -> ManifestResult:
 
     az_blob_service_client.upload_blob_to_container(client_manifest_name, ismc_xml_string, overwrite=False)
     logger.info(f"{client_manifest_name} is created and stored to the {az_blob_service_client.container_client.container_name} container")
+
     result.ismc_created = True
     
+    return result
+
+def generate_manifests_local_use(settings: dict) -> ManifestResult:
+    """
+    Generate and upload server and client manifests (.ism and .ismc) to the Azure container.
+    
+    Args:
+        settings: Configuration settings including Azure connection info
+        
+    Returns:
+        ManifestResult with generation status
+    """
+    logger: Logger = Logger("main")
+    logger.info("Starting manifest generation process")
+
+    logger.info("Using local directory mode")
+    local_file_service_client: LocalFileServiceClient = LocalFileServiceClient(settings)
+    blob_media_data: BlobMediaData = LocalDataHandler.get_data_from_local_files(local_file_service_client)
+    
+    media_data: MediaData = MediaDataParser.get_media_data(blob_media_data.media_datas, blob_media_data.media_index_datas, settings.get('is_multithreading', False))
+
+    result = ManifestResult(manifest_name=blob_media_data.manifest_name)
+    
+    # Generate and upload server manifest (.ism)
+    server_manifest_name = f'{blob_media_data.manifest_name}.ism'
+            
+    audios = IsmGenerator.get_audios(media_track_infos=media_data.media_track_info_list)
+    videos = IsmGenerator.get_videos(media_track_infos=media_data.media_track_info_list)
+    text_streams = IsmGenerator.get_text_streams(media_data.media_track_info_list, blob_media_data.text_data_info_list)
+    ism_xml_string = IsmGenerator.generate(blob_media_data.manifest_name, audios=audios, videos=videos, text_streams=text_streams)
+    
+    local_file_service_client.write_file(server_manifest_name, ism_xml_string)
+    logger.info(f"{server_manifest_name} is created and stored to the {local_file_service_client.local_directory} directory")
+
+    result.ism_created = True
+
+    # Generate and upload client manifest (.ismc)
+    client_manifest_name = f'{blob_media_data.manifest_name}.ismc'
+    print(f"Generating client manifest: {client_manifest_name}")
+
+    ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration, media_track_infos=media_data.media_track_info_list, text_data_info_list=blob_media_data.text_data_info_list)
+    local_file_service_client.write_file(client_manifest_name, ismc_xml_string)
+    logger.info(f"{client_manifest_name} is created and stored to the {local_file_service_client.local_directory} directory")
+
+    result.ismc_created = True
+
     return result
 
 if __name__ == '__main__':
     settings_from_cli_arguments = CliArgumentsParser.parse()
     settings_from_config_file = ConfigFileParser.parse()
     settings = Common.merge_dicts([settings_from_config_file, settings_from_cli_arguments])
+
+    use_local = 'local_directory' in settings and settings['local_directory'] is not None
     
     # Create overall summary
     overall_summary = ProcessingSummary()
@@ -120,10 +177,14 @@ if __name__ == '__main__':
     # Convert VTT files to CMFT before manifest generation if configured
     # Default to False if not specified to maintain backward compatibility
     if settings.get('convert_webvtt', False):
-        conversion_summary = convert_vtt_to_cmft(settings)
+        conversion_summary = convert_vtt_to_cmft(settings, use_local=use_local)
         overall_summary.conversion_summary = conversion_summary
     
-    manifest_result = generate_manifests(settings)
+    if use_local:
+        manifest_result = generate_manifests_local_use(settings)
+    else:   
+        manifest_result = generate_manifests_azure_use(settings)
+    
     overall_summary.manifest_result = manifest_result
     
     # Display comprehensive summary

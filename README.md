@@ -36,6 +36,7 @@ The tool parses .mp4 and .cmft files from an Azure container, generates .ism and
 - .vtt (raw mode and conversion to CMFT)
 
 ## HowTo run
+### With Azure Storage
 ```
 python3 main.py -connection_string=<Azure storage account's connection string> -container_name=<Azure container name>
 ```
@@ -44,6 +45,13 @@ or
 python3 main.py
 ```
 in case if the configuration file azure_config.json has been filled (the configuration file shall be situated in the same folder as the main.py file).
+
+### With Local Directory
+```
+python3 main.py -local_directory=/path/to/directory/with/mp4/files
+```
+This mode processes MP4 files from a local directory and generates ISM/ISMC manifests in the same directory. This option is completely independent of Azure and does not require any Azure configuration.
+
 ### azure_config.json
 azure_config.json - configuration file may contain the following fields: connection_string, account_name, account_key, container_name:
 ```
@@ -54,6 +62,7 @@ azure_config.json - configuration file may contain the following fields: connect
   "container_name": "test2"
 }
 ```
+**Note:** The `local_directory` option is only available as a command-line argument (`-local_directory`) and cannot be configured in the azure_config.json file.
 It's possible to set the `connection_string`  fileld or `account_name` and `account_key` .
 If only the `account_name` and `account_key` fields are specified, the connection string is formed from them.
 If all fields are set, only the `connection_string` field value is used. In this case the `account_name` and `account_key` fields are ignored.

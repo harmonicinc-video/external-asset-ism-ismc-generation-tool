@@ -19,6 +19,7 @@ class CliArgumentsParser:
         argument_parser.add_argument("-is_multithreading", action="store_true", help="Enable multi-threaded mode. Default is single-threaded mode.")
         argument_parser.add_argument("-asset_zip_name", metavar="asset_zip_name", type=str, help="Name of the asset zip file.")
         argument_parser.add_argument("-local_copy", action="store_true", help="Create local copy of ISM/ISMC files.")
+        argument_parser.add_argument('-local_directory', metavar='local_directory', type=str, help="Local directory containing MP4 files (alternative to Azure)")
         return argument_parser
 
     @classmethod

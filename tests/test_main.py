@@ -4,7 +4,7 @@ Simple test for main.py functions
 import os
 import sys
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 # Add parent directory to path to import main
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

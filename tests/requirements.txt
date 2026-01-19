@@ -1,5 +1,6 @@
 allure-pytest==2.13.5
 allure-python-commons==2.13.5
+azure-core==1.29.4
 azure-storage-blob==12.8.1
 construct==2.8.8
 pytest-xdist==2.3.0

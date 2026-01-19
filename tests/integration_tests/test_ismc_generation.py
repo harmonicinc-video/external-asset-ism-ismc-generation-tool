@@ -913,7 +913,7 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[2].chunk_datas[9].duration == '7600000'
                             assert ismc_object.stream_indexes[2].chunk_datas[9].r == '1'
 
-    @title('Test Ismc Generation for audio multi-profiles')
+    @title('Test Ismc Generation for asset with timescale=0 in mvhd box')
     @description('Test .ismc manifest generation for asset with timescale=0 in mvhd box')
     # Test data
     #     Azure: asset-fd8e9830-fbb9-4970-a5fc-fc262ee2df7a

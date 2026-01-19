@@ -3,7 +3,7 @@ import ttconv
 import ttconv.imsc.reader as imsc_reader
 from xml.etree import ElementTree as ET
 
-from typing import Tuple, Dict, List, Union
+from typing import Tuple, Union
 
 from external_asset_ism_ismc_generation_tool.common.logger.i_logger import ILogger
 from external_asset_ism_ismc_generation_tool.common.logger.logger import Logger

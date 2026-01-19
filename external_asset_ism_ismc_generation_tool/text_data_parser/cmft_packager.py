@@ -529,7 +529,7 @@ class CmftPackager:
         
         # tfra is a FullBox with version and flags
         tfra_data = b'tfra'
-        tfra_data += struct.pack('>B', 0)  # version 0 (32-bit time and offset)
+        tfra_data += struct.pack('>B', 1 if use_version_1 else 0)  # version
         tfra_data += struct.pack('>I', 0)[1:]  # flags (3 bytes)
         
         # track_ID = 1 (our subtitle track)

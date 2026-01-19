@@ -22,20 +22,22 @@ The tool parses .mp4 and .cmft files from an Azure container, generates .ism and
 - AAC-LC
 - AAC-HE (when it's compatible with AAC-LC and we interpret it as AAC-LC)
 - E-AC3
+### Subtitles
+- WebVTT (conversion to IMSC1)
 
-## Supported formats:
-# media formats:
+## Supported extensions:
+### media formats:
 - .mp4
 - .mpi
 - .ismv
 - .isma
 - .cmft
 
-# text formats
+### text formats
 - .ttml (raw mode only)
 - .vtt (raw mode and conversion to CMFT)
 
-## HowTo run
+## How to run
 ### With Azure Storage
 ```
 python3 main.py -connection_string=<Azure storage account's connection string> -container_name=<Azure container name>
@@ -199,15 +201,11 @@ Language codes are embedded at three levels to ensure proper signalization:
 - **Missing body element**: IMSC1 missing required `<body>` element
 - **Missing div element**: IMSC1 missing required `<div>` element inside body
 
-**Unexpected Errors**:
-
 ### CMFT Packaging Errors
 
 **Data Validation**:
 - **ValueError**: Invalid segment data or structure
 - **struct.error**: Binary data packing issues
-
-**Unexpected Errors**:
 
 ### Conversion Summary
 

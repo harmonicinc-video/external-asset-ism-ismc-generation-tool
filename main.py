@@ -1,5 +1,3 @@
-import os
-
 from external_asset_ism_ismc_generation_tool.common.common import Common
 from external_asset_ism_ismc_generation_tool.common.logger.logger import Logger
 from external_asset_ism_ismc_generation_tool.media_data_parser.media_data_parser import MediaDataParser

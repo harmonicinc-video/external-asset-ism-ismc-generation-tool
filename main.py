@@ -122,10 +122,10 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
 
 def generate_manifests_local_use(settings: dict) -> ManifestResult:
     """
-    Generate and upload server and client manifests (.ism and .ismc) to the Azure container.
+    Generate and save server and client manifests (.ism and .ismc) to a local directory.
     
     Args:
-        settings: Configuration settings including Azure connection info
+        settings: Configuration settings including local directory settings
         
     Returns:
         ManifestResult with generation status

@@ -912,3 +912,89 @@ class TestIsmcGeneration:
                             assert not ismc_object.stream_indexes[2].chunk_datas[9].time_start
                             assert ismc_object.stream_indexes[2].chunk_datas[9].duration == '7600000'
                             assert ismc_object.stream_indexes[2].chunk_datas[9].r == '1'
+
+    @title('Test Ismc Generation for audio multi-profiles')
+    @description('Test .ismc manifest generation for asset with timescale=0 in mvhd box')
+    # Test data
+    #     Azure: asset-fd8e9830-fbb9-4970-a5fc-fc262ee2df7a
+    #     List of files:
+    #         0128.isma
+    #         0400.ismv
+    #         0700.ismv
+    #         1000.ismv
+    #         2600.ismv
+    #         4000.ismv
+    #         6000.ismv
+    def test_asset_timescale_0(self):
+        with Allure.Step("Prepare test data"):
+            with Allure.Step("Get data from file"):
+                mp4_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_timescale_0_data.json'))['media_datas']
+                assert mp4_datas
+            with Allure.Step("Get media_track_info_list from mp4_datas"):
+                media_data: MediaData = MediaDataParser.get_media_data(mp4_datas)
+                assert media_data.media_track_info_list
+                assert len(media_data.media_track_info_list) == 7
+        with Allure.Step("Generate .ismc manifest base on media_track_info_list"):
+            with Allure.Step("Generate .ismc manifest"):
+                ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration,
+                                                         media_track_infos=media_data.media_track_info_list)
+                assert ismc_xml_string
+            with Allure.Step("Verify .ismc manifest"):
+                ismc_object = IsmcManifestExtractor.extract(ismc_manifest_str=ismc_xml_string)
+                assert ismc_object
+                with Allure.Step("Verify SmoothStreamingMedia attributes"):
+                    assert ismc_object.major_version == '2'
+                    assert ismc_object.minor_version == '2'
+                    assert ismc_object.time_scale == '10000000'
+                    assert ismc_object.duration == '0'
+                    assert len(ismc_object.stream_indexes) == 2
+                with Allure.Step("Verify StreamIndexes"):
+                    with Allure.Step("Verify StreamIndex attributes for the audio track"):
+                        assert ismc_object.stream_indexes[0].chunks == '24'
+                        assert ismc_object.stream_indexes[0].language == 'und'
+                        assert ismc_object.stream_indexes[0].name == 'Undetermined'
+                        assert ismc_object.stream_indexes[0].quality_levels == '1'
+                        assert ismc_object.stream_indexes[0].stream_type == 'audio'
+                        assert ismc_object.stream_indexes[0].url == 'QualityLevels({bitrate})/Fragments(Undetermined={start time})'
+                        assert len(ismc_object.stream_indexes[0].quality_level_list) == 1
+                        assert len(ismc_object.stream_indexes[0].chunk_datas) > 0
+                        with Allure.Step("Verify QualityLevel attributes for the audio track"):
+                            assert ismc_object.stream_indexes[0].quality_level_list[0].audio_tag == '255'
+                            assert ismc_object.stream_indexes[0].quality_level_list[0].bitrate == '0'
+                            assert ismc_object.stream_indexes[0].quality_level_list[0].bits_per_sample == '16'
+                            assert ismc_object.stream_indexes[0].quality_level_list[0].channels == '2'
+                            assert ismc_object.stream_indexes[0].quality_level_list[0].codec_private_data == '1190'
+                            assert ismc_object.stream_indexes[0].quality_level_list[0].four_cc == 'AACL'
+                            assert ismc_object.stream_indexes[0].quality_level_list[0].index == '0'
+                            assert ismc_object.stream_indexes[0].quality_level_list[0].packet_size == '4'
+                            assert ismc_object.stream_indexes[0].quality_level_list[0].sampling_rate == '48000'
+                        with Allure.Step("Verify c elements attributes for the audio track"):
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].time_start == '0'
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '20053333'
+                            # Note: chunks=24 but only checking first element, r value may vary
+
+                    with Allure.Step("Verify StreamIndex attributes for the video track"):
+                        assert ismc_object.stream_indexes[1].chunks == '25'
+                        assert ismc_object.stream_indexes[1].name == 'video_0'
+                        assert ismc_object.stream_indexes[1].quality_levels == '6'
+                        assert ismc_object.stream_indexes[1].stream_type == 'video'
+                        assert ismc_object.stream_indexes[1].url == 'QualityLevels({bitrate})/Fragments(video_0={start time})'
+                        assert len(ismc_object.stream_indexes[1].quality_level_list) == 6
+                        assert len(ismc_object.stream_indexes[1].chunk_datas) > 0
+                        with Allure.Step("Verify QualityLevel attributes for the video track"):
+                            assert ismc_object.stream_indexes[1].quality_level_list[0].bitrate == '395019'
+                            assert ismc_object.stream_indexes[1].quality_level_list[0].codec_private_data.upper() == '00000001674D401FEC80F047F5808800001F480007530078C18CB00000000168EBE152C8'
+                            assert ismc_object.stream_indexes[1].quality_level_list[0].four_cc.upper() == 'AVC1'
+                            assert ismc_object.stream_indexes[1].quality_level_list[0].index == '0'
+                            assert ismc_object.stream_indexes[1].quality_level_list[0].max_height == '270'
+                            assert ismc_object.stream_indexes[1].quality_level_list[0].max_width == '480'
+
+                            assert ismc_object.stream_indexes[1].quality_level_list[5].bitrate == '5988138'
+                            assert ismc_object.stream_indexes[1].quality_level_list[5].codec_private_data.upper() == '0000000167640029ACD900780227E5C04400000FA40003A9803C60C6580000000168EBE152C8B0'
+                            assert ismc_object.stream_indexes[1].quality_level_list[5].four_cc.upper() == 'AVC1'
+                            assert ismc_object.stream_indexes[1].quality_level_list[5].index == '5'
+                            assert ismc_object.stream_indexes[1].quality_level_list[5].max_height == '1080'
+                            assert ismc_object.stream_indexes[1].quality_level_list[5].max_width == '1920'
+                        with Allure.Step("Verify c elements attributes for the video track"):
+                            assert ismc_object.stream_indexes[1].chunk_datas[0].time_start == '0'
+                            # Note: Duration and r values may vary based on fragment structure

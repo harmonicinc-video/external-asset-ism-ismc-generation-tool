@@ -393,10 +393,18 @@ class CmftPackager:
         
         uuid_box = CmftPackager.__wrap_box(uuid_data)
         
+        # Determine if we need version 1 (64-bit) or version 0 (32-bit) for trun box
+        # Version 1 is needed when duration exceeds 32-bit limits
+        use_version_1 = duration > 0xFFFFFFFF
+        trun_version = 1 if use_version_1 else 0
+        
         # Build trun box (need to calculate moof size first for data_offset)
-        # trun size: 4 (size) + 4 (type) + 1 (version) + 3 (flags) + 4 (sample_count) 
+        # trun size calculation depends on version
+        # Version 0: 4 (size) + 4 (type) + 1 (version) + 3 (flags) + 4 (sample_count) 
         #          + 4 (data_offset) + 4 (sample_duration) + 4 (sample_size) = 28 bytes
-        trun_size = 28
+        # Version 1: 4 (size) + 4 (type) + 1 (version) + 3 (flags) + 4 (sample_count) 
+        #          + 4 (data_offset) + 8 (sample_duration) + 4 (sample_size) = 32 bytes
+        trun_size = 32 if use_version_1 else 28
         
         # Calculate moof box size:
         # moof: 8 (header) + mfhd_box + traf_box
@@ -409,12 +417,15 @@ class CmftPackager:
         
         # trun (track run) box
         trun_data = b'trun'
-        trun_data += struct.pack('>B', 0)  # version
+        trun_data += struct.pack('>B', trun_version)  # version
         # flags: data_offset_present (0x000001) + sample_duration_present (0x000100) + sample_size_present (0x000200)
         trun_data += struct.pack('>I', 0x000301)[1:]  # flags (3 bytes)
         trun_data += struct.pack('>I', 1)  # sample_count
         trun_data += struct.pack('>I', data_offset)  # data_offset
-        trun_data += struct.pack('>I', duration)  # sample_duration
+        if use_version_1:
+            trun_data += struct.pack('>Q', duration)  # sample_duration (64-bit)
+        else:
+            trun_data += struct.pack('>I', duration)  # sample_duration (32-bit)
         trun_data += struct.pack('>I', sample_size)  # sample_size
         
         trun_box = CmftPackager.__wrap_box(trun_data)
@@ -510,6 +521,12 @@ class CmftPackager:
         Returns:
             Bytes containing the complete tfra box
         """
+        # Determine if we need version 1 (64-bit) based on max values
+        # Version 0 uses 32-bit unsigned integers, max value: 4,294,967,295
+        max_time = max(segment_times) if segment_times else 0
+        max_offset = max(moof_offsets) if moof_offsets else 0
+        use_version_1 = max_time > 0xFFFFFFFF or max_offset > 0xFFFFFFFF
+        
         # tfra is a FullBox with version and flags
         tfra_data = b'tfra'
         tfra_data += struct.pack('>B', 0)  # version 0 (32-bit time and offset)
@@ -532,11 +549,18 @@ class CmftPackager:
         
         # Add entries for each segment
         for i in range(number_of_entries):
-            # time (32-bit in version 0)
-            tfra_data += struct.pack('>I', segment_times[i])
-            
-            # moof_offset (32-bit in version 0)
-            tfra_data += struct.pack('>I', moof_offsets[i])
+            if use_version_1:
+                # time (64-bit in version 1)
+                tfra_data += struct.pack('>Q', segment_times[i])
+                
+                # moof_offset (64-bit in version 1)
+                tfra_data += struct.pack('>Q', moof_offsets[i])
+            else:
+                # time (32-bit in version 0)
+                tfra_data += struct.pack('>I', segment_times[i])
+                
+                # moof_offset (32-bit in version 0)
+                tfra_data += struct.pack('>I', moof_offsets[i])
             
             # traf_number (1 byte, since length_size_of_traf_num = 0)
             # We have only one traf per moof, so always 1

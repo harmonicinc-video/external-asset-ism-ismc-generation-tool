@@ -507,6 +507,39 @@ def test_bad_vtt_to_cmft_conversion():
     print(f"  Input: asset-test-vtt-syntax_BAD.vtt")
     print(f"  Segments: {len(segments)}")
     print(f"  Duration: {total_duration:.2f}s")
+
+def test_big_vtt_to_cmft_conversion():
+    """Test the complete VTT to CMFT conversion pipeline."""
+    # Read asset-test-vtt-syntax_ENG.vtt
+    with open(Common.get_data_file_path('asset-test-vtt-big-lorem.vtt'), 'r', encoding='utf-8') as f:
+        vtt_content = f.read()
+    
+    if vtt_content.startswith('\ufeff'):
+        vtt_content = vtt_content[1:]
+    
+    # Step 1: Convert to IMSC1
+    imsc1_content, warnings = VttToImsc1Converter.convert(vtt_content)
+    assert imsc1_content is not None
+    
+    # Step 2: Segment
+    segment_duration = 4.0
+    segments = Imsc1Segmenter.segment(imsc1_content, segment_duration)
+    assert len(segments) > 0
+    
+    # Step 3: Package
+    if segments:
+        last_start, _ = segments[-1]
+        total_duration = last_start + segment_duration
+    else:
+        total_duration = 0.0
+    
+    cmft_data = CmftPackager.package(segments, timescale=10000000, total_duration=total_duration)
+    assert len(cmft_data) > 0
+    
+    print(f"✓ Big VTT to CMFT conversion successful")
+    print(f"  Input: asset-test-vtt-big-lorem.vtt")
+    print(f"  Segments: {len(segments)}")
+    print(f"  Duration: {total_duration:.2f}s")
     
 
 if __name__ == '__main__':
@@ -532,6 +565,9 @@ if __name__ == '__main__':
         print()
         
         test_bad_vtt_to_cmft_conversion()
+        print()
+        
+        test_big_vtt_to_cmft_conversion()
         print()
         
         test_compare_with_reference()

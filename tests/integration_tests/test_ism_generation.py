@@ -643,3 +643,89 @@ class TestIsmGeneration:
                         assert video_streams[1].params[0].name == "trackID"
                         assert video_streams[1].params[0].value == "1"
                         assert video_streams[1].params[0].value_type == "data"
+
+    @title('Test Ism Generation for audio multi-profiles')
+    @description('Test .ism manifest generation for asset with timescale=0 in mvhd box')
+    # Test data
+    #     Azure: asset-fd8e9830-fbb9-4970-a5fc-fc262ee2df7a
+    #     List of files:
+    #         0128.isma
+    #         0400.ismv
+    #         0700.ismv
+    #         1000.ismv
+    #         2600.ismv
+    #         4000.ismv
+    #         6000.ismv
+    def test_asset_timescale_0(self):
+        with Allure.Step("Prepare test data"):
+            with Allure.Step("Get data from file"):
+                mp4_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_timescale_0_data.json'))['media_datas']
+                assert mp4_datas
+            with Allure.Step("Get media_track_info_list from mp4_datas"):
+                media_data: MediaData = MediaDataParser.get_media_data(mp4_datas)
+                assert media_data.media_track_info_list
+                assert len(media_data.media_track_info_list) == 7
+        with Allure.Step("Generate .ism manifest base on media_track_info_list"):
+            with Allure.Step("Get audio tracks info"):
+                audios = IsmGenerator.get_audios(media_track_infos=media_data.media_track_info_list)
+                assert audios
+                assert len(audios) == 1
+            with Allure.Step("Get video tracks info"):
+                videos = IsmGenerator.get_videos(media_track_infos=media_data.media_track_info_list)
+                assert videos
+                assert len(videos) == 6
+            with Allure.Step("Generate .ism manifest"):
+                server_manifest_name = f'{list(mp4_datas.keys())[0].split(".")[0]}'
+                ism_xml_string = IsmGenerator.generate(server_manifest_name, audios=audios, videos=videos)
+                assert ism_xml_string
+            with Allure.Step("Verify .ism manifest"):
+                ism_object = IsmManifestExtractor.extract(ism_manifest_str=ism_xml_string)
+                assert ism_object
+                with Allure.Step("Verify ism manifest head"):
+                    assert ism_object.head
+                    meta_list = ism_object.head.meta_list
+                    assert meta_list
+                    assert len(meta_list) == 3
+                    assert meta_list[0].name == 'formats'
+                    assert meta_list[0].content == 'mp4'
+                    assert meta_list[1].name == 'fragmentsPerHLSSegment'
+                    assert meta_list[1].content == '1'
+                    assert meta_list[2].name == 'clientManifestRelativePath'
+                    assert meta_list[2].content == '0128.ismc'
+                with Allure.Step("Verify ism manifest body"):
+                    with Allure.Step("Verify audios"):
+                        audios = ism_object.body.audios
+                        assert len(audios) == 1
+
+                        assert audios[0].src == '0128.isma'
+                        assert audios[0].params[0].name == "trackID"
+                        assert audios[0].params[0].value_type == "data"
+
+                    with Allure.Step("Verify videos"):
+                        videos = ism_object.body.videos
+                        assert len(videos) == 6
+
+                        assert videos[0].src == '0400.ismv'
+                        assert videos[0].params[0].name == "trackID"
+                        assert videos[0].params[0].value_type == "data"
+
+                        assert videos[1].src == '0700.ismv'
+                        assert videos[1].params[0].name == "trackID"
+                        assert videos[1].params[0].value_type == "data"
+
+                        assert videos[2].src == '1000.ismv'
+                        assert videos[2].params[0].name == "trackID"
+                        assert videos[2].params[0].value_type == "data"
+
+                        assert videos[3].src == '2600.ismv'
+                        assert videos[3].params[0].name == "trackID"
+                        assert videos[3].params[0].value_type == "data"
+
+                        assert videos[4].src == '4000.ismv'
+                        assert videos[4].params[0].name == "trackID"
+                        assert videos[4].params[0].value_type == "data"
+
+                        assert videos[5].src == '6000.ismv'
+                        assert videos[5].params[0].name == "trackID"
+                        assert videos[5].params[0].value_type == "data"
+

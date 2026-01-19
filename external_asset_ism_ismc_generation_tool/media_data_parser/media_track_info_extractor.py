@@ -48,7 +48,13 @@ class MediaTrackInfoExtractor:
         if self.track_type is not TrackType.TEXT:
             self.track_size = self.stsz_parser.get_track_size()
         self.timescale = self.trak_parser.get_timescale()
-        self.duration = mvhd_duration / mvhd_timescale
+        # For fragmented MP4 files (with moof boxes), duration should be calculated from fragments
+        # For regular MP4 files, calculate from mvhd box
+        if mvhd_timescale > 0:
+            self.duration = mvhd_duration / mvhd_timescale
+        else:
+            # Duration will be calculated from moof fragments later
+            self.duration = 0
         self.blob_name = blob_name
         self.mvex_atom = mvex_atom
 
@@ -151,14 +157,39 @@ class MediaTrackInfoExtractor:
             language=self.trak_parser.get_track_language()
         )
 
-    def __calculate_bit_rate(self, size) -> int:
+    def __calculate_bit_rate(self, size, duration=None) -> int:
+        """Calculate bitrate from size and duration.
+        
+        Args:
+            size: Total size in bytes
+            duration: Duration in seconds (optional, uses self.duration if not provided)
+        
+        Returns:
+            Bitrate in bits per second
+        """
+        if duration is None:
+            duration = self.duration
+        
+        if duration <= 0:
+            MediaTrackInfoExtractor.__logger.warning(f'Invalid duration {duration}, cannot calculate bitrate')
+            return 0
+            
         size_in_bits = size * 8
-        return int(size_in_bits / self.duration)
+        return int(size_in_bits / duration)
 
     def __extract_chunks_and_bitrate_from_moof(self, moof_fragments: dict) -> Tuple[list, int]:
         track_id_info = moof_fragments.get(self.track_id)
         chunks, chunk_sizes = track_id_info
-        bitrate = self.__calculate_bit_rate(sum(chunk_sizes))
+        
+        # Calculate bitrate
+        # If we have a valid duration from mvhd, use it for consistency with regular MP4 files
+        # Otherwise, calculate from fragment durations
+        if self.duration > 0:
+            bitrate = self.__calculate_bit_rate(sum(chunk_sizes))
+        else:
+            # For files with invalid mvhd duration (timescale=0), calculate from fragments
+            total_duration = sum(chunks)
+            bitrate = self.__calculate_bit_rate(sum(chunk_sizes), total_duration)
         return chunks, bitrate
 
     def __determine_four_cc(self) -> str:

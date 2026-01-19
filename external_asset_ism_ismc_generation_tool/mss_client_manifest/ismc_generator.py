@@ -53,7 +53,7 @@ class IsmcGenerator:
 
         xml_ismc = ismc_document.to_xml()
         ET.indent(xml_ismc)
-        return ET.tostring(xml_ismc, encoding="utf-8", method="xml").decode("utf-8")
+        return ET.tostring(xml_ismc, encoding="utf-8", method="xml", xml_declaration=True).decode("utf-8")
 
     @staticmethod
     def __get_stream_indexes(

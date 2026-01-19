@@ -151,6 +151,7 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
     logger.info(f"{server_manifest_name} is created and stored to the {local_file_service_client.local_directory} directory")
 
     result.ism_created = True
+    result.ism_filename = server_manifest_name
 
     # Generate and upload client manifest (.ismc)
     client_manifest_name = f'{blob_media_data.manifest_name}.ismc'
@@ -161,6 +162,7 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
     logger.info(f"{client_manifest_name} is created and stored to the {local_file_service_client.local_directory} directory")
 
     result.ismc_created = True
+    result.ismc_filename = client_manifest_name
 
     return result
 

@@ -31,7 +31,7 @@ class IsmGenerator:
         ism_document.body = IsmGenerator.__fill_body(audios, videos, text_streams)
         xml_ism = ism_document.to_xml()
         ET.indent(xml_ism)
-        ism_doc = ET.tostring(xml_ism, encoding="utf-8", method="xml")
+        ism_doc = ET.tostring(xml_ism, encoding="utf-8", method="xml", xml_declaration=True)
         return ism_doc.decode("utf-8")
 
     @staticmethod

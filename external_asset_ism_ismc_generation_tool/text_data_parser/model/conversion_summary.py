@@ -63,6 +63,8 @@ class ManifestResult:
     ismc_created: bool = False
     ismc_skipped: bool = False
     manifest_name: str = ""
+    ism_filename: str = ""
+    ismc_filename: str = ""
 
 
 @dataclass
@@ -87,14 +89,20 @@ class ProcessingSummary:
         if self.manifest_result:
             lines.append("\nManifest Generation:")
             if self.manifest_result.ism_created:
-                lines.append(f"  ✓ Server manifest created: {self.manifest_result.manifest_name}.ism")
+                ism_name = self.manifest_result.ism_filename or f"{self.manifest_result.manifest_name}.ism"
+                lines.append(f"  ✓ Server manifest created: {ism_name}")
             elif self.manifest_result.ism_skipped:
-                lines.append(f"  ⊘ Server manifest skipped: {self.manifest_result.manifest_name}.ism (already exists)")
+                ism_name = self.manifest_result.ism_filename or f"{self.manifest_result.manifest_name}.ism"
+                lines.append(f"  ⊘ Server manifest skipped: {ism_name} (already exists)")
             
             if self.manifest_result.ismc_created:
-                lines.append(f"  ✓ Client manifest created: {self.manifest_result.manifest_name}.ismc")
+                ismc_name = self.manifest_result.ismc_filename or f"{self.manifest_result.manifest_name}.ismc"
+                lines.append(f"  ✓ Client manifest created: {ismc_name}")
             elif self.manifest_result.ismc_skipped:
-                lines.append(f"  ⊘ Client manifest skipped: {self.manifest_result.manifest_name}.ismc (already exists)")
+                ismc_name = self.manifest_result.ismc_filename or f"{self.manifest_result.manifest_name}.ismc"
+                lines.append(f"  ⊘ Client manifest skipped: {ismc_name} (already exists)")
         
+
+
         lines.append("="*70 + "\n")
         return "\n".join(lines)

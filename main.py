@@ -156,7 +156,7 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
 
     # Generate and upload client manifest (.ismc)
     client_manifest_name = f'{blob_media_data.manifest_name}.ismc'
-    print(f"Generating client manifest: {client_manifest_name}")
+    logger.info(f"Generating client manifest: {client_manifest_name}")
 
     ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration, media_track_infos=media_data.media_track_info_list, text_data_info_list=blob_media_data.text_data_info_list)
     local_file_service_client.write_file(client_manifest_name, ismc_xml_string)

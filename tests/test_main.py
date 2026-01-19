@@ -67,7 +67,7 @@ class TestConvertVttToCmft:
         mock_converter.convert_vtt_files_in_container.side_effect = Exception("Test error")
         
         # Execute
-        result = convert_vtt_to_cmft(settings)
+        result = convert_vtt_to_cmft(settings, use_local=True)
         
         # Verify - should return empty summary on error
         assert result.total == 0

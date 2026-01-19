@@ -10,10 +10,7 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from main import convert_vtt_to_cmft, generate_manifests_local_use, generate_manifests_azure_use
-from external_asset_ism_ismc_generation_tool.text_data_parser.model.conversion_summary import (
-    ConversionSummary, 
-    ManifestResult
-)
+from external_asset_ism_ismc_generation_tool.text_data_parser.model.conversion_summary import ConversionSummary
 
 
 class TestConvertVttToCmft:

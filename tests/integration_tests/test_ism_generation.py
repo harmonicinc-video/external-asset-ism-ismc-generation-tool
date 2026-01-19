@@ -644,7 +644,7 @@ class TestIsmGeneration:
                         assert video_streams[1].params[0].value == "1"
                         assert video_streams[1].params[0].value_type == "data"
 
-    @title('Test Ism Generation for audio multi-profiles')
+    @title('Test Ism Generation for asset with timescale=0 in mvhd box')
     @description('Test .ism manifest generation for asset with timescale=0 in mvhd box')
     # Test data
     #     Azure: asset-fd8e9830-fbb9-4970-a5fc-fc262ee2df7a

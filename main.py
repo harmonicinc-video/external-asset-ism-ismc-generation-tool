@@ -40,7 +40,8 @@ def convert_vtt_to_cmft(settings: dict, use_local: bool = False) -> ConversionSu
             summary = VttToCmftConverter.convert_vtt_files_in_container(local_file_service_client)
         else:
             logger.info("Using Azure mode")
-            az_blob_service_client: AzureBlobServiceClient = AzureBlobServiceClient(settings)                # Convert all VTT files in the container to CMFT
+            # Convert all VTT files in the container to CMFT
+            az_blob_service_client: AzureBlobServiceClient = AzureBlobServiceClient(settings)
             summary = VttToCmftConverter.convert_vtt_files_in_container(az_blob_service_client)
 
         if summary.total > 0:

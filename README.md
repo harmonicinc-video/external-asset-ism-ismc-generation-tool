@@ -63,7 +63,7 @@ azure_config.json - configuration file may contain the following fields: connect
 }
 ```
 **Note:** The `local_directory` option is only available as a command-line argument (`-local_directory`) and cannot be configured in the azure_config.json file.
-It's possible to set the `connection_string`  fileld or `account_name` and `account_key` .
+It's possible to set the `connection_string`  field or `account_name` and `account_key` .
 If only the `account_name` and `account_key` fields are specified, the connection string is formed from them.
 If all fields are set, only the `connection_string` field value is used. In this case the `account_name` and `account_key` fields are ignored.
 

@@ -5,6 +5,7 @@ from tools.pymp4.src.pymp4.parser import Box
 from external_asset_ism_ismc_generation_tool.common.logger.i_logger import ILogger
 from external_asset_ism_ismc_generation_tool.common.logger.logger import Logger
 from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.audio_parser import AudioParser
+from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.dac3_parser import DAC3Parser
 from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.dec3_parser import DEC3Parser
 from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.esds_parser import ESDSParser
 from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.stsd_parser import STSDParser
@@ -134,6 +135,11 @@ class MediaTrackInfoExtractor:
             channels = audio_track_data.channels
             packet_size = str(4 * audio_track_data.data_rate)
             sampling_rate = audio_track_data.sample_rate
+        elif self.audio_parser.audio_format == TrackFormat.AC_3.value:
+            audio_tag = '8192'  # 0x2000 - AC-3
+            channels = audio_track_data.channels
+            packet_size = str(4 * audio_track_data.data_rate)
+            sampling_rate = audio_track_data.sample_rate
         elif self.audio_parser.audio_format == TrackFormat.MP4A.value:
             audio_tag = '255'  # 0xFF - undefined
             channels = self.stsd_parser.get_channels()
@@ -204,6 +210,29 @@ class MediaTrackInfoExtractor:
     def __get_audio_parser(self, stbl_atom: Box) -> AudioParser:
         if self.stsd_parser.stsd_atom_entries[0].format == b'ec-3':
             return DEC3Parser(MediaBoxExtractor.get_mp4_sub_box(stbl_atom, 'dec3'))
+        elif self.stsd_parser.stsd_atom_entries[0].format == b'ac-3':
+            dac3_box = MediaBoxExtractor.get_mp4_sub_box(stbl_atom, 'dac3')
+            if not dac3_box:
+                # AC-3 box might be embedded in the stsd entry data
+                dac3_box = self.__extract_dac3_from_entry()
+            return DAC3Parser(dac3_box)
         elif self.stsd_parser.stsd_atom_entries[0].format == b'mp4a':
             return ESDSParser(MediaBoxExtractor.get_mp4_sub_box(stbl_atom, 'esds'))
+        return None
+
+    def __extract_dac3_from_entry(self) -> Box:
+        """Extract dac3 box from STSD entry data for AC-3 audio"""
+        entry = self.stsd_parser.stsd_atom_entries[0]
+        if hasattr(entry, 'data') and entry.data:
+            entry_data = entry.data
+            idx = entry_data.find(b'dac3')
+            if idx != -1 and idx >= 4:
+                dac3_size = int.from_bytes(entry_data[idx-4:idx], 'big')
+                dac3_data = entry_data[idx+4:idx+dac3_size-4]
+                # Create a simple box-like object with data attribute
+                class DAC3Box:
+                    def __init__(self, data):
+                        self.data = data
+                        self.type = b'dac3'
+                return DAC3Box(dac3_data)
         return None

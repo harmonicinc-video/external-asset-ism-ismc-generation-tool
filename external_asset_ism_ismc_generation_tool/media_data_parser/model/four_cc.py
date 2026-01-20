@@ -10,6 +10,7 @@ class FourCC(Enum):
     AAC_HE = 'AACH'
     AACP = 'AACP'
     EC_3 = "EC-3"
+    AC_3 = "AC-3"    
 
     UNKNOWN = None
 

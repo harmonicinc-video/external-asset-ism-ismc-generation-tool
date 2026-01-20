@@ -10,6 +10,7 @@ from external_asset_ism_ismc_generation_tool.media_data_parser.model.descriptor.
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.descriptor.es_descriptor_decoder_specific_info import \
     ESDescriptorDecoderSpecificInfo
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.descriptor.dec3_descriptor import DEC3Descriptor
+from external_asset_ism_ismc_generation_tool.media_data_parser.model.descriptor.dac3_descriptor import DAC3Descriptor
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.descriptor.dec3_descriptor_info import DEC3DescriptorInfo
 
 class DescriptorParser:
@@ -99,6 +100,32 @@ class DescriptorParser:
 
             descriptors.append(DEC3Descriptor(codec_private_data.upper(), channel_count, data_rate, sample_rate))
         return descriptors
+
+    @staticmethod
+    def get_dac3_descriptors(dac3_data: bytes) -> List[Descriptor]:
+        descriptors = []
+        reader = BitReader(dac3_data)
+        fscod = reader.get_bits(2)  # sample rate code
+        bsid = reader.get_bits(5)   # bitstream identification
+        bsmod = reader.get_bits(3)  # bitstream mode
+        acmod = reader.get_bits(3)  # audio coding mode
+        lfeon = reader.get_bits(1)  # LFE channel on
+        bit_rate_code = reader.get_bits(5)  # bit rate code
+        reader.get_bits(5)  # reserved
+        
+        # Calculate data rate from bit rate code
+        # AC-3 bit rate table (in kbps)
+        ac3_bitrates = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640]
+        data_rate = ac3_bitrates[bit_rate_code] if bit_rate_code < len(ac3_bitrates) else 640
+        
+        channels = DescriptorParser.__get_channels(acmod, lfeon, 0, 0)
+        channel_count = DescriptorParser.__get_channel_count(channels)
+        channel_mask_str = DescriptorParser.__get_channel_mask_str(channels)
+        codec_private_data = DescriptorParser.__get_codec_private_data(channel_mask_str, dac3_data)
+        sample_rate = DEC3DescriptorInfo.dolby_digital_sample_rates[fscod]
+        
+        descriptors.append(DAC3Descriptor(codec_private_data.upper(), channel_count, data_rate, sample_rate))
+        return descriptors        
 
     @staticmethod
     def __get_channels(audio_coding_mod: int,

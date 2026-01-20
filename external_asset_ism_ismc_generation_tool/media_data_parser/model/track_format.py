@@ -6,6 +6,7 @@ class TrackFormat(Enum):
     AVC1 = 'avc1'
     HEVC1 = 'hvc1'
     EC_3 = 'ec-3'
+    AC_3 = 'ac-3'
 
     UNKNOWN = None
 

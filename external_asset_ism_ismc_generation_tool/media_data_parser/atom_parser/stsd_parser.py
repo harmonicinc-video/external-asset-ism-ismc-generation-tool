@@ -20,10 +20,22 @@ class STSDParser:
         return self.stsd_atom.entries[0].format.decode("utf-8")
 
     def get_width(self) -> int:
-        return self.stsd_atom.entries[0]['width']
+        entry = self.stsd_atom.entries[0]
+        if 'width' in entry:
+            return entry['width']
+        # For entries with embedded data (like HEVC), extract from data field
+        if 'data' in entry and len(entry['data']) >= 18:
+            return int.from_bytes(entry['data'][16:18], 'big')
+        return 0
 
     def get_height(self) -> int:
-        return self.stsd_atom.entries[0]['height']
+        entry = self.stsd_atom.entries[0]
+        if 'height' in entry:
+            return entry['height']
+        # For entries with embedded data (like HEVC), extract from data field
+        if 'data' in entry and len(entry['data']) >= 20:
+            return int.from_bytes(entry['data'][18:20], 'big')
+        return 0
 
     def get_video_codec_private_data(self) -> str:
         track_format = self.get_track_format()
@@ -55,16 +67,24 @@ class STSDParser:
             return ""
 
     def get_bits_per_sample(self) -> int:
-        return self.stsd_atom_entries[0].bits_per_sample
+        if hasattr(self.stsd_atom_entries[0], 'bits_per_sample'):
+            return self.stsd_atom_entries[0].bits_per_sample
+        return 16  # Default for AC-3
 
     def get_channels(self) -> int:
-        return self.stsd_atom_entries[0].channels
+        if hasattr(self.stsd_atom_entries[0], 'channels'):
+            return self.stsd_atom_entries[0].channels
+        return 2  # Default for AC-3 stereo
 
     def get_sampling_rate(self) -> int:
-        return self.stsd_atom_entries[0].sampling_rate
+        if hasattr(self.stsd_atom_entries[0], 'sampling_rate'):
+            return self.stsd_atom_entries[0].sampling_rate
+        return 48000  # Default for AC-3
 
     def get_packet_size(self) -> int:
-        return self.stsd_atom_entries[0].packet_size
+        if hasattr(self.stsd_atom_entries[0], 'packet_size'):
+            return self.stsd_atom_entries[0].packet_size
+        return 0  # Will be calculated elsewhere for AC-3
 
     def is_stpp(self) -> str:
         return self.stsd_atom and self.stsd_atom.entries and self.stsd_atom.entries[0].format == b'stpp'

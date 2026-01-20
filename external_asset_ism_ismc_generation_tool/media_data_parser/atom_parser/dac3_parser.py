@@ -31,8 +31,8 @@ class DAC3Parser(AudioParser):
 
         # AC-3 should only have one descriptor
         if len(descriptors) > 1:
-            DAC3Parser.__logger.error(f'Detected {len(descriptors)} dac3 descriptors.')
-            raise ValueError("More than 1 dac3 (ac-3) descriptors detected.")
+            DAC3Parser.__logger.error(f'Detected {len(descriptors)} dac3 substreams.')
+            raise ValueError(f"More than 1 dac3 (ac-3) substream detected: {len(descriptors)} substreams found.")
         descriptor = descriptors[0]
         return AudioTrackData(descriptor.codec_private_data,
                               bit_rate,

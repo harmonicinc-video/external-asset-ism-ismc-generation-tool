@@ -69,22 +69,41 @@ class STSDParser:
     def get_bits_per_sample(self) -> int:
         if hasattr(self.stsd_atom_entries[0], 'bits_per_sample'):
             return self.stsd_atom_entries[0].bits_per_sample
-        return 16  # Default for AC-3
+        # Only apply AC-3 default if format is actually AC-3
+        if self.stsd_atom_entries[0].format == b'ac-3':
+            return 16  # AC-3 default
+        STSDParser.__logger.warning(
+            f'bits_per_sample not found for format {self.stsd_atom_entries[0].format}, returning 0'
+        )
+        return 0
 
     def get_channels(self) -> int:
         if hasattr(self.stsd_atom_entries[0], 'channels'):
             return self.stsd_atom_entries[0].channels
-        return 2  # Default for AC-3 stereo
+        # Only apply AC-3 default if format is actually AC-3
+        if self.stsd_atom_entries[0].format == b'ac-3':
+            return 2  # AC-3 stereo default
+        STSDParser.__logger.warning(
+            f'channels not found for format {self.stsd_atom_entries[0].format}, returning 0'
+        )
+        return 0
 
     def get_sampling_rate(self) -> int:
         if hasattr(self.stsd_atom_entries[0], 'sampling_rate'):
             return self.stsd_atom_entries[0].sampling_rate
-        return 48000  # Default for AC-3
+        # Only apply AC-3 default if format is actually AC-3
+        if self.stsd_atom_entries[0].format == b'ac-3':
+            return 48000  # AC-3 default
+        STSDParser.__logger.warning(
+            f'sampling_rate not found for format {self.stsd_atom_entries[0].format}, returning 0'
+        )
+        return 0
 
     def get_packet_size(self) -> int:
         if hasattr(self.stsd_atom_entries[0], 'packet_size'):
             return self.stsd_atom_entries[0].packet_size
-        return 0  # Will be calculated elsewhere for AC-3
+        # Return 0 if not found; will be calculated elsewhere based on format
+        return 0
 
     def is_stpp(self) -> str:
         return self.stsd_atom and self.stsd_atom.entries and self.stsd_atom.entries[0].format == b'stpp'

@@ -1,3 +1,4 @@
+from collections import namedtuple
 from typing import Tuple
 
 from tools.pymp4.src.pymp4.parser import Box
@@ -19,6 +20,9 @@ from external_asset_ism_ismc_generation_tool.media_data_parser.model.track_forma
 from external_asset_ism_ismc_generation_tool.media_data_parser.media_box_extractor.media_box_extractor import MediaBoxExtractor
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.audio_track_data import AudioTrackData
 from external_asset_ism_ismc_generation_tool.common.common import Common
+
+# Simple box-like object for dac3 data
+DAC3Box = namedtuple('DAC3Box', ['data', 'type'])
 
 
 class MediaTrackInfoExtractor:
@@ -228,14 +232,35 @@ class MediaTrackInfoExtractor:
         entry = self.stsd_parser.stsd_atom_entries[0]
         if hasattr(entry, 'data') and entry.data:
             entry_data = entry.data
+            entry_len = len(entry_data)
             idx = entry_data.find(b'dac3')
-            if idx != -1 and idx >= 4:
-                dac3_size = int.from_bytes(entry_data[idx-4:idx], 'big')
-                dac3_data = entry_data[idx+4:idx+dac3_size-4]
-                # Create a simple box-like object with data attribute
-                class DAC3Box:
-                    def __init__(self, data):
-                        self.data = data
-                        self.type = b'dac3'
-                return DAC3Box(dac3_data)
+            if idx != -1 and idx >= 4 and idx + 4 <= entry_len:
+                # Read the size field (4 bytes immediately before 'dac3')
+                dac3_size = int.from_bytes(entry_data[idx - 4:idx], 'big')
+                # Basic sanity check: box size must at least contain size(4) + type(4)
+                if dac3_size < 8:
+                    MediaTrackInfoExtractor.__logger.warning(
+                        f'Invalid dac3 box size {dac3_size} found in STSD entry'
+                    )
+                    return None
+                box_start = idx - 4
+                box_end = box_start + dac3_size
+                # Ensure the declared box bounds are within the entry data
+                if box_end > entry_len:
+                    MediaTrackInfoExtractor.__logger.warning(
+                        f'dac3 box size {dac3_size} exceeds entry data length {entry_len}'
+                    )
+                    return None
+                payload_start = idx + 4  # skip the 'dac3' type
+                payload_end = box_end
+                if payload_start >= payload_end:
+                    MediaTrackInfoExtractor.__logger.warning(
+                        'Computed empty or invalid payload range for dac3 box'
+                    )
+                    return None
+                dac3_data = entry_data[payload_start:payload_end]
+                MediaTrackInfoExtractor.__logger.info(
+                    f'Successfully extracted dac3 box from STSD entry data (size: {len(dac3_data)} bytes)'
+                )
+                return DAC3Box(data=dac3_data, type=b'dac3')
         return None

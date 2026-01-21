@@ -129,7 +129,14 @@ class DescriptorParser:
         channel_count = DescriptorParser.__get_channel_count(channels)
         channel_mask_str = DescriptorParser.__get_channel_mask_str(channels)
         codec_private_data = DescriptorParser.__get_codec_private_data(channel_mask_str, dac3_data)
-        sample_rate = DEC3DescriptorInfo.dolby_digital_sample_rates[fscod]
+        # According to AC-3, fscod == 3 is reserved and does not correspond to a valid sample rate.
+        if fscod == 3:
+            DescriptorParser.__logger.warning(
+                f"Reserved fscod value 3 encountered in DAC3 descriptor; setting sample rate to 0."
+            )
+            sample_rate = 0
+        else:
+            sample_rate = DEC3DescriptorInfo.dolby_digital_sample_rates[fscod]
         
         descriptors.append(DAC3Descriptor(codec_private_data.upper(), channel_count, data_rate, sample_rate))
         return descriptors        

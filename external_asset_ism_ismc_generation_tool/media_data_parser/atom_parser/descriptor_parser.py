@@ -114,15 +114,24 @@ class DescriptorParser:
         reader.get_bits(5)  # reserved
         
         # Calculate data rate from bit rate code
-        # AC-3 bit rate table (in kbps)
+        # AC-3 bit rate table (in kbps) for bit_rate_code values 0–18.
+        # According to the AC-3 specification, bit_rate_code is a 5-bit field (0–31),
+        # where values 19–31 are reserved and do not map to additional bitrates.
         ac3_bitrates = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640]
-        if bit_rate_code < len(ac3_bitrates):
+        if 0 <= bit_rate_code < len(ac3_bitrates):
             data_rate = ac3_bitrates[bit_rate_code]
-        else:
+        elif bit_rate_code <= 31:
+            # Reserved bit_rate_code values 19–31 (per AC-3 spec). Use a safe fallback bitrate.
             DescriptorParser.__logger.warning(
-                f"Out-of-range AC-3 bit_rate_code {bit_rate_code}; using fallback bitrate {ac3_bitrates[-1]} kbps."
+                f"Reserved AC-3 bit_rate_code {bit_rate_code}; using fallback bitrate {ac3_bitrates[-1]} kbps."
             )
             # Preserve existing behavior by falling back to 640 kbps
+            data_rate = ac3_bitrates[-1]
+        else:
+            # This should not occur for a 5-bit field, but handle defensively.
+            DescriptorParser.__logger.warning(
+                f"Invalid AC-3 bit_rate_code {bit_rate_code}; using fallback bitrate {ac3_bitrates[-1]} kbps."
+            )
             data_rate = ac3_bitrates[-1]
         
         channels = DescriptorParser.__get_channels(acmod, lfeon, 0, 0)

@@ -8,7 +8,6 @@ class DAC3Descriptor(Descriptor):
     sample_rate: int
 
     def __init__(self, codec_private_data: str, channels: int, data_rate: int, sample_rate: int):
-        super().__init__(tag=0)  # DAC3 descriptors don't have tags from box format
         self.codec_private_data = codec_private_data
         self.channels = channels
         self.data_rate = data_rate

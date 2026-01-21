@@ -215,6 +215,9 @@ class MediaTrackInfoExtractor:
             if not dac3_box:
                 # AC-3 box might be embedded in the stsd entry data
                 dac3_box = self.__extract_dac3_from_entry()
+            if not dac3_box:
+                MediaTrackInfoExtractor.__logger.error('Unable to locate dac3 box for AC-3 audio track')
+                raise ValueError('Missing dac3 box for AC-3 audio track')
             return DAC3Parser(dac3_box)
         elif self.stsd_parser.stsd_atom_entries[0].format == b'mp4a':
             return ESDSParser(MediaBoxExtractor.get_mp4_sub_box(stbl_atom, 'esds'))

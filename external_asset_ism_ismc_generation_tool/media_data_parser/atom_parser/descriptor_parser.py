@@ -107,7 +107,7 @@ class DescriptorParser:
         reader = BitReader(dac3_data)
         fscod = reader.get_bits(2)  # sample rate code
         bsid = reader.get_bits(5)   # bitstream identification
-        reader.get_bits(3)  # bitstream mode
+        bsmod = reader.get_bits(3)  # bitstream mode
         acmod = reader.get_bits(3)  # audio coding mode
         lfeon = reader.get_bits(1)  # LFE channel on
         bit_rate_code = reader.get_bits(5)  # bit rate code

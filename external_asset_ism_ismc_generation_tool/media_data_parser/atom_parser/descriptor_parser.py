@@ -116,7 +116,14 @@ class DescriptorParser:
         # Calculate data rate from bit rate code
         # AC-3 bit rate table (in kbps)
         ac3_bitrates = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640]
-        data_rate = ac3_bitrates[bit_rate_code] if bit_rate_code < len(ac3_bitrates) else 640
+        if bit_rate_code < len(ac3_bitrates):
+            data_rate = ac3_bitrates[bit_rate_code]
+        else:
+            DescriptorParser.__logger.warning(
+                f"Out-of-range AC-3 bit_rate_code {bit_rate_code}; using fallback bitrate {ac3_bitrates[-1]} kbps."
+            )
+            # Preserve existing behavior by falling back to 640 kbps
+            data_rate = ac3_bitrates[-1]
         
         channels = DescriptorParser.__get_channels(acmod, lfeon, 0, 0)
         channel_count = DescriptorParser.__get_channel_count(channels)

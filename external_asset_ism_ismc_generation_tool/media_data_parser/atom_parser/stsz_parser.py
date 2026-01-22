@@ -15,6 +15,9 @@ class STSZParser:
         self.stsz_atom = stsz_atom
 
     def get_track_size(self) -> int:
+        if self.stsz_atom is None:
+            self.__logger.error("STSZ atom is None. Cannot calculate track size.")
+            return 0
         # If sample_size is non-zero, all samples have the same size
         if self.stsz_atom.sample_size != 0:
             return self.stsz_atom.sample_size * self.stsz_atom.sample_count

@@ -26,7 +26,7 @@ class STSZParser:
             Total size in bytes, or 0 if STSZ atom is not available
         """
         if self.stsz_atom is None:
-            self.__logger.warning(
+            STSZParser.__logger.info(
                 "STSZ atom is None. Returning 0 (size will be calculated from moof fragments for fragmented MP4)."
             )
             return 0

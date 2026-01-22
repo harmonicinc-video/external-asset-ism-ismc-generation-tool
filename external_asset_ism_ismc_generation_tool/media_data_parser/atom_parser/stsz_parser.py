@@ -1,3 +1,5 @@
+from typing import Optional
+
 from tools.pymp4.src.pymp4.parser import Box
 
 from external_asset_ism_ismc_generation_tool.common.logger.i_logger import ILogger
@@ -11,12 +13,22 @@ class STSZParser:
     def redefine_logger(cls, logger: ILogger):
         cls.__logger = logger
 
-    def __init__(self, stsz_atom: Box):
+    def __init__(self, stsz_atom: Optional[Box]):
         self.stsz_atom = stsz_atom
 
     def get_track_size(self) -> int:
+        """Calculate total track size from STSZ atom.
+        
+        Returns 0 if stsz_atom is None, which is expected for fragmented MP4 files
+        where size/bitrate is derived from moof boxes instead.
+        
+        Returns:
+            Total size in bytes, or 0 if STSZ atom is not available
+        """
         if self.stsz_atom is None:
-            self.__logger.error("STSZ atom is None. Cannot calculate track size.")
+            self.__logger.warning(
+                "STSZ atom is None. Returning 0 (size will be calculated from moof fragments for fragmented MP4)."
+            )
             return 0
         # If sample_size is non-zero, all samples have the same size
         if self.stsz_atom.sample_size != 0:

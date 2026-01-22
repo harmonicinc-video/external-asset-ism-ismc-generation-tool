@@ -1,5 +1,3 @@
-from typing import Optional
-
 from tools.pymp4.src.pymp4.parser import Box
 
 from external_asset_ism_ismc_generation_tool.common.logger.i_logger import ILogger
@@ -13,7 +11,7 @@ class STSZParser:
     def redefine_logger(cls, logger: ILogger):
         cls.__logger = logger
 
-    def __init__(self, stsz_atom: Optional[Box]):
+    def __init__(self, stsz_atom: Box):
         self.stsz_atom = stsz_atom
 
     def get_track_size(self) -> int:

@@ -1078,8 +1078,14 @@ class TestIsmcGeneration:
 
                     with Allure.Step("Verify StreamIndex attributes for text tracks"):
                         # Separate IMSC (CMFT) and WVTT (VTT) tracks
-                        imsc_tracks = [t for t in text_indexes if t.quality_level_list[0].four_cc == 'IMSC']
-                        wvtt_tracks = [t for t in text_indexes if t.quality_level_list[0].four_cc == 'WVTT']
+                        imsc_tracks = [
+                            t for t in text_indexes
+                            if t.quality_level_list and t.quality_level_list[0].four_cc == 'IMSC'
+                        ]
+                        wvtt_tracks = [
+                            t for t in text_indexes
+                            if t.quality_level_list and t.quality_level_list[0].four_cc == 'WVTT'
+                        ]
                         
                         assert len(imsc_tracks) == 2  # 2 CMFT tracks
                         assert len(wvtt_tracks) == 2  # 2 VTT tracks

@@ -729,3 +729,96 @@ class TestIsmGeneration:
                         assert videos[5].params[0].name == "trackID"
                         assert videos[5].params[0].value_type == "data"
 
+
+    @title('Test Ism Generation for asset with VTT to be converted to CMFT')
+    @description('Test .ism manifest generation for asset with VTT to be converted to CMFT')
+    # Test data
+    #     Contains VTT files to be converted to CMFT format for subtitle streaming
+    def test_asset_vtt_conversion(self):
+        with Allure.Step("Prepare test data"):
+            with Allure.Step("Get data from file"):
+                mp4_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_conversion_data.json'))['media_datas']
+                assert mp4_datas
+            with Allure.Step("Get media_track_info_list from mp4_datas"):
+                media_data: MediaData = MediaDataParser.get_media_data(mp4_datas)
+                assert media_data.media_track_info_list
+                # Verify we have audio, video and text tracks (1 video + 2 audio + 2 text)
+                assert len(media_data.media_track_info_list) == 5
+        with Allure.Step("Generate .ism manifest base on media_track_info_list"):
+            with Allure.Step("Get audio tracks info"):
+                audios = IsmGenerator.get_audios(media_track_infos=media_data.media_track_info_list)
+                assert audios
+                assert len(audios) == 2
+            with Allure.Step("Get video tracks info"):
+                videos = IsmGenerator.get_videos(media_track_infos=media_data.media_track_info_list)
+                assert videos
+                assert len(videos) == 1
+            with Allure.Step("Get text stream tracks info"):
+                text_datas: List[TextDataInfo] = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_conversion_data.json'))['text_data_infos_list']
+                text_streams = IsmGenerator.get_text_streams(media_track_infos=media_data.media_track_info_list, text_datas=text_datas)
+                assert text_streams
+                # 4 text streams: 2 CMFT + 2 VTT
+                assert len(text_streams) == 4
+            with Allure.Step("Generate .ism manifest"):
+                server_manifest_name = f'{list(mp4_datas.keys())[0].split(".")[0]}'
+                ism_xml_string = IsmGenerator.generate(server_manifest_name, audios=audios, videos=videos, text_streams=text_streams)
+                assert ism_xml_string
+            with Allure.Step("Verify .ism manifest"):
+                ism_object = IsmManifestExtractor.extract(ism_manifest_str=ism_xml_string)
+                assert ism_object
+                with Allure.Step("Verify ism manifest head"):
+                    assert ism_object.head
+                    meta_list = ism_object.head.meta_list
+                    assert meta_list
+                    assert len(meta_list) == 3
+                    assert meta_list[0].name == 'formats'
+                    assert meta_list[0].content == 'mp4'
+                    assert meta_list[1].name == 'fragmentsPerHLSSegment'
+                    assert meta_list[1].content == '1'
+                    # Verify clientManifestRelativePath exists
+                    assert meta_list[2].name == 'clientManifestRelativePath'
+                    assert meta_list[2].content
+                with Allure.Step("Verify ism manifest body"):
+                    with Allure.Step("Verify audio streams"):
+                        audio_streams = ism_object.body.audios
+                        assert len(audio_streams) == 2
+                        # Verify all audio streams have required properties
+                        for audio in audio_streams:
+                            assert audio.src
+                            assert audio.system_bitrate
+                            assert audio.system_language
+                            assert len(audio.params) >= 1
+                            assert audio.params[0].name == "trackID"
+                            assert audio.params[0].value
+                            assert audio.params[0].value_type == "data"
+
+                    with Allure.Step("Verify video streams"):
+                        video_streams = ism_object.body.videos
+                        assert len(video_streams) == 1
+                        # Verify all video streams have required properties
+                        for video in video_streams:
+                            assert video.src
+                            assert video.system_bitrate
+                            assert len(video.params) >= 1
+                            assert video.params[0].name == "trackID"
+                            assert video.params[0].value
+                            assert video.params[0].value_type == "data"
+
+                    with Allure.Step("Verify text streams"):
+                        text_streams = ism_object.body.text_streams
+                        assert len(text_streams) == 4
+                        # Verify all text streams have required properties
+                        for text in text_streams:
+                            assert text.src
+                            # Case-insensitive check for file extensions
+                            assert text.src.lower().endswith('.vtt') or text.src.lower().endswith('.cmft')
+                            assert text.system_bitrate
+                            assert text.system_language
+                            assert len(text.params) >= 1
+                            assert text.params[0].name == "trackID"
+                            assert text.params[0].value
+                            assert text.params[0].value_type == "data"
+                        # Verify specific languages - should have 2 eng and 2 fra (from CMFT and VTT)
+                        text_languages = sorted([text.system_language for text in text_streams])
+                        assert text_languages == ['eng', 'eng', 'fra', 'fra']
+

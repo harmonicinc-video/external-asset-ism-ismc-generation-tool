@@ -998,3 +998,132 @@ class TestIsmcGeneration:
                         with Allure.Step("Verify c elements attributes for the video track"):
                             assert ismc_object.stream_indexes[1].chunk_datas[0].time_start == '0'
                             # Note: Duration and r values may vary based on fragment structure
+
+    @title('Test Ismc Generation for asset with VTT to be converted to CMFT')
+    @description('Test .ismc manifest generation for asset with VTT files converted to CMFT format')
+    # Test data
+    #     Contains VTT files to be converted to CMFT format for subtitle streaming
+    def test_asset_vtt_conversion(self):
+        with Allure.Step("Prepare test data"):
+            with Allure.Step("Get data from file"):
+                mp4_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_conversion_data.json'))['media_datas']
+                assert mp4_datas
+                text_datas: List[TextDataInfo] = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_conversion_data.json'))['text_data_infos_list']
+                assert text_datas
+            with Allure.Step("Get media_track_info_list from mp4_datas"):
+                media_data: MediaData = MediaDataParser.get_media_data(media_datas=mp4_datas)
+                assert media_data.media_track_info_list
+                # Verify we have audio, video and text tracks (1 video + 2 audio + 2 text)
+                assert len(media_data.media_track_info_list) == 5
+        with Allure.Step("Generate .ismc manifest base on media_track_info_list"):
+            with Allure.Step("Generate .ismc manifest"):
+                ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration,
+                                                         media_track_infos=media_data.media_track_info_list,
+                                                         text_data_info_list=text_datas)
+                assert ismc_xml_string
+            with Allure.Step("Verify .ismc manifest"):
+                ismc_object = IsmcManifestExtractor.extract(ismc_manifest_str=ismc_xml_string)
+                assert ismc_object
+                with Allure.Step("Verify SmoothStreamingMedia attributes"):
+                    assert ismc_object.major_version == '2'
+                    assert ismc_object.minor_version == '2'
+                    assert ismc_object.time_scale == '10000000'
+                    assert ismc_object.duration
+                    # Verify we have 2 audio + 1 video + 4 text (2 CMFT + 2 VTT) stream indexes
+                    assert len(ismc_object.stream_indexes) == 7
+                with Allure.Step("Verify StreamIndexes"):
+                    # Find indexes by type
+                    audio_indexes = [idx for idx in ismc_object.stream_indexes if idx.stream_type == 'audio']
+                    video_indexes = [idx for idx in ismc_object.stream_indexes if idx.stream_type == 'video']
+                    text_indexes = [idx for idx in ismc_object.stream_indexes if idx.stream_type == 'text']
+                    
+                    assert len(audio_indexes) == 2
+                    assert len(video_indexes) == 1
+                    assert len(text_indexes) == 4
+                    
+                    with Allure.Step("Verify StreamIndex attributes for the audio tracks"):
+                        for audio_index in audio_indexes:
+                            assert audio_index.stream_type == 'audio'
+                            assert audio_index.quality_levels == '1'
+                            assert audio_index.language == 'eng'
+                            assert len(audio_index.quality_level_list) == 1
+                            assert len(audio_index.chunk_datas) > 0
+                            with Allure.Step("Verify QualityLevel attributes for audio track"):
+                                audio_quality = audio_index.quality_level_list[0]
+                                assert audio_quality.audio_tag == '255'
+                                assert audio_quality.bitrate
+                                assert audio_quality.four_cc == 'AACL'
+                                assert audio_quality.channels
+                                assert audio_quality.sampling_rate
+                            with Allure.Step("Verify c elements attributes for audio track"):
+                                assert audio_index.chunk_datas[0].time_start == '0'
+                                assert audio_index.chunk_datas[0].duration
+
+                    with Allure.Step("Verify StreamIndex attributes for the video track"):
+                        video_index = video_indexes[0]
+                        assert video_index.stream_type == 'video'
+                        assert video_index.quality_levels == '1'
+                        assert video_index.name
+                        assert len(video_index.quality_level_list) == 1
+                        assert len(video_index.chunk_datas) > 0
+                        with Allure.Step("Verify QualityLevel attributes for the video track"):
+                            video_quality = video_index.quality_level_list[0]
+                            assert video_quality.bitrate
+                            assert video_quality.four_cc
+                            assert video_quality.max_width
+                            assert video_quality.max_height
+                        with Allure.Step("Verify c elements attributes for the video track"):
+                            assert video_index.chunk_datas[0].time_start == '0'
+                            assert video_index.chunk_datas[0].duration
+
+                    with Allure.Step("Verify StreamIndex attributes for text tracks"):
+                        # Separate IMSC (CMFT) and WVTT (VTT) tracks
+                        imsc_tracks = [t for t in text_indexes if t.quality_level_list[0].four_cc == 'IMSC']
+                        wvtt_tracks = [t for t in text_indexes if t.quality_level_list[0].four_cc == 'WVTT']
+                        
+                        assert len(imsc_tracks) == 2  # 2 CMFT tracks
+                        assert len(wvtt_tracks) == 2  # 2 VTT tracks
+                        
+                        with Allure.Step("Verify IMSC (CMFT) text tracks"):
+                            # Check languages
+                            imsc_languages = sorted([t.language for t in imsc_tracks])
+                            assert imsc_languages == ['eng', 'fra']
+                            
+                            # Check names
+                            imsc_names = sorted([t.name for t in imsc_tracks])
+                            assert imsc_names == ['English', 'French']
+                            
+                            for text_index in imsc_tracks:
+                                assert text_index.stream_type == 'text'
+                                assert text_index.quality_levels == '1'
+                                assert text_index.language in ['eng', 'fra']
+                                assert len(text_index.quality_level_list) == 1
+                                assert len(text_index.chunk_datas) > 0
+                                
+                                text_quality = text_index.quality_level_list[0]
+                                assert text_quality.bitrate
+                                assert text_quality.four_cc == 'IMSC'
+                                
+                                # Verify 4-second segment duration (40000000 at timescale 10000000)
+                                assert text_index.chunk_datas[0].time_start == '0'
+                                assert text_index.chunk_datas[0].duration == '40000000'
+                        
+                        with Allure.Step("Verify WVTT (VTT) text tracks"):
+                            # VTT tracks from text_data_info_list don't have language in stream index
+                            # but should have names
+                            wvtt_names = sorted([t.name for t in wvtt_tracks])
+                            assert wvtt_names == ['English', 'French']
+                            
+                            for text_index in wvtt_tracks:
+                                assert text_index.stream_type == 'text'
+                                assert text_index.quality_levels == '1'
+                                assert len(text_index.quality_level_list) == 1
+                                assert len(text_index.chunk_datas) > 0
+                                
+                                text_quality = text_index.quality_level_list[0]
+                                assert text_quality.bitrate
+                                assert text_quality.four_cc == 'WVTT'
+                                
+                                # VTT files may have different start times based on their content timing
+                                assert text_index.chunk_datas[0].time_start
+                                assert text_index.chunk_datas[0].duration

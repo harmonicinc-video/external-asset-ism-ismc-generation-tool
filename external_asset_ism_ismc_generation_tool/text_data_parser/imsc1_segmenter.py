@@ -110,11 +110,13 @@ class Imsc1Segmenter:
                         
                         segment_cues.append(cue_copy)
                 
-                # Create segment XML
+                # Create segment XML (always create segment, even if empty, to maintain timing alignment)
+                segment_xml = Imsc1Segmenter.__create_segment_xml(root, segment_cues, namespaces)
+                segments.append((current_segment_start, segment_xml))
                 if segment_cues:
-                    segment_xml = Imsc1Segmenter.__create_segment_xml(root, segment_cues, namespaces)
-                    segments.append((current_segment_start, segment_xml))
                     Imsc1Segmenter.__logger.info(f"Created segment at {current_segment_start}s with {len(segment_cues)} cues")
+                else:
+                    Imsc1Segmenter.__logger.debug(f"Created empty segment at {current_segment_start}s")
                 
                 # Move to next segment
                 current_segment_start = current_segment_end

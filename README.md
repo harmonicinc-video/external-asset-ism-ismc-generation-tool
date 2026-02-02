@@ -80,7 +80,7 @@ python3 main.py -is_multithreading
 Currently ISM/ISMC generation tool supports two modes: one-threaded and multi-threaded. Multi-threaded mode uses the maximum amount of threads your system can handle.
 
 ```
-python3 main.py --local_copy
+python3 main.py -local_copy
 ```
 Run with local generation of ISM/ISMC (debug)
 
@@ -100,8 +100,8 @@ Controls how WebVTT files are handled:
 
 ## Utilities for Azure
 ```bash
-python3 upload_asset.py     # unzip and upload an asset in Azure Blob (before calling the main process)
-python3 remove_asset.py     # remove an asset from Azure Blob
+python3 upload_azure_asset.py -asset_zip_name=<zip_flie>     # unzip and upload an asset in Azure Blob (before calling the main process)
+python3 remove_azure_asset.py     # remove an asset from Azure Blob
 ```
 
 ## Testing
@@ -111,6 +111,11 @@ Run tests with:
 pytest
 pytest tests/integration_tests/ -v # run test subset for manifest generation
 pytest tests/conversion_tests/ -v # run test subset for manifest generation
+```
+
+Generate JSON test assets with:
+```bash
+python3 generate_test_data.py -output_name=<output_file_without_extension>
 ```
 
 ## Key Directories

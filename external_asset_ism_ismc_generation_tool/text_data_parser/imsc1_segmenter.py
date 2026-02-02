@@ -115,8 +115,7 @@ class Imsc1Segmenter:
                 segments.append((current_segment_start, segment_xml))
                 if segment_cues:
                     Imsc1Segmenter.__logger.info(f"Created segment at {current_segment_start}s with {len(segment_cues)} cues")
-                else:
-                    Imsc1Segmenter.__logger.debug(f"Created empty segment at {current_segment_start}s")
+                # Note: Empty segments are still created for timing alignment, but not logged to reduce noise
                 
                 # Move to next segment
                 current_segment_start = current_segment_end

@@ -100,7 +100,7 @@ Controls how WebVTT files are handled:
 
 ## Utilities for Azure
 ```bash
-python3 upload_azure_asset.py -asset_zip_name=<zip_flie>     # unzip and upload an asset in Azure Blob (before calling the main process)
+python3 upload_azure_asset.py -asset_zip_name=<zip_file>     # unzip and upload an asset in Azure Blob (before calling the main process)
 python3 remove_azure_asset.py     # remove an asset from Azure Blob
 ```
 

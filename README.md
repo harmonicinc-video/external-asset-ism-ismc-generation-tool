@@ -4,7 +4,7 @@ harmonic_external_asset_ism_ismc_generation_tool is a command line tool to gener
 The tool parses .mp4 and .cmft files from an Azure container, generates .ism and .ismc manifests if they do not exist, and loads them into the Azure container. 
 
 ## Prerequisites
-- Python 3.12
+- Python 3.12+
 - Python libs:
   - azure-core==1.29.4
   - azure-storage-blob==12.8.1
@@ -222,3 +222,4 @@ The summary provides:
 - List of failed files with specific error reasons
 - Manifest generation status (created or skipped)
 - Appears at the end of processing, after both VTT conversion and manifest generation
+

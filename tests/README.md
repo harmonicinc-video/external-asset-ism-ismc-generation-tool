@@ -6,7 +6,7 @@ tests is a module for testing external_asset_ism_ismc_generation tool.
 
 
 ## Prerequisites
-- Python 3.12
+- Python 3.12+
 - Python libs:
   - azure-core==1.29.4
   - azure-storage-blob==12.8.1

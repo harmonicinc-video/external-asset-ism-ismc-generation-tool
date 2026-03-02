@@ -117,7 +117,7 @@ class IsmGenerator:
                 # Get track name from language code or use "Undefined" as fallback
                 try:
                     language_code, language_name = Common.get_language_3_code_and_name(text_data.language)
-                    track_name = language_name
+                    track_name = f"subs_{language_name}"
                 except Exception:
                     track_name = "Undefined"
             else:

@@ -805,20 +805,51 @@ class TestIsmGeneration:
                             assert video.params[0].value_type == "data"
 
                     with Allure.Step("Verify text streams"):
+                        # Check IMSC (CMFT) and WVTT (VTT) tracks
                         text_streams = ism_object.body.text_streams
                         assert len(text_streams) == 4
-                        # Verify all text streams have required properties
-                        for text in text_streams:
-                            assert text.src
-                            # Case-insensitive check for file extensions
-                            assert text.src.lower().endswith('.vtt') or text.src.lower().endswith('.cmft')
-                            assert text.system_bitrate
-                            assert text.system_language
-                            assert len(text.params) >= 1
-                            assert text.params[0].name == "trackID"
-                            assert text.params[0].value
-                            assert text.params[0].value_type == "data"
-                        # Verify specific languages - should have 2 eng and 2 fra (from CMFT and VTT)
-                        text_languages = sorted([text.system_language for text in text_streams])
-                        assert text_languages == ['eng', 'eng', 'fra', 'fra']
+                        cmft_streams = [t for t in text_streams if t.src.lower().endswith('.cmft')]
+                        vtt_streams = [t for t in text_streams if t.src.lower().endswith('.vtt')]
+                        assert len(cmft_streams) == 2
+                        assert len(vtt_streams) == 2
+
+                        with Allure.Step("Verify CMFT text tracks"):
+                            # Check languages
+                            cmft_languages = sorted([t.system_language for t in cmft_streams])
+                            assert cmft_languages == ['eng', 'fra']
+
+                            # Check names
+                            cmft_track_names = sorted([t.params[1].value for t in cmft_streams])
+                            assert cmft_track_names == ['subs_English', 'subs_French']
+
+                            for text in cmft_streams:
+                                assert text.src
+                                assert text.system_bitrate
+                                assert text.system_language in ['eng', 'fra']
+                                assert len(text.params) >= 2
+                                assert text.params[0].name == "trackID"
+                                assert text.params[0].value
+                                assert text.params[0].value_type == "data"
+                                assert text.params[1].name == "trackName"
+                                assert text.params[1].value_type == "data"
+
+                        with Allure.Step("Verify VTT text tracks"):
+                            # Check languages
+                            vtt_languages = sorted([t.system_language for t in vtt_streams])
+                            assert vtt_languages == ['eng', 'fra']
+
+                            # Check names
+                            vtt_track_names = sorted([t.params[1].value for t in vtt_streams])
+                            assert vtt_track_names == ['subs_English', 'subs_French']
+
+                            for text in vtt_streams:
+                                assert text.src
+                                assert text.system_bitrate
+                                assert text.system_language in ['eng', 'fra']
+                                assert len(text.params) >= 2
+                                assert text.params[0].name == "trackID"
+                                assert text.params[0].value
+                                assert text.params[0].value_type == "data"
+                                assert text.params[1].name == "trackName"
+                                assert text.params[1].value_type == "data"
 

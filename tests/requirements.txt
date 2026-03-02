@@ -4,6 +4,6 @@ azure-core==1.29.4
 azure-storage-blob==12.8.1
 construct==2.8.8
 pytest-xdist==2.3.0
-pycountry==22.3.5
+pycountry==23.12.7
 webvtt-py==0.5.1
 ttconv==1.2.1

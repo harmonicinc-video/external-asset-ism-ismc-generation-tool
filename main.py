@@ -181,7 +181,10 @@ if __name__ == '__main__':
     if settings.get('convert_webvtt', False):
         conversion_summary = convert_vtt_to_cmft(settings, use_local=use_local)
         overall_summary.conversion_summary = conversion_summary
-    
+    else:
+        # convert_webvtt is disabled - record this in the summary without scanning storage
+        overall_summary.conversion_summary = ConversionSummary(disabled=True)
+
     if use_local:
         manifest_result = generate_manifests_local_use(settings)
     else:   

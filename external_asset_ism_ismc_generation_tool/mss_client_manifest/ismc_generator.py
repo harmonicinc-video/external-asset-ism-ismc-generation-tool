@@ -135,11 +135,12 @@ class IsmcGenerator:
             quality_level = IsmcGenerator.__get_text_quality_levels(text_stream_info=(text_data_info.name, str(text_data_info.bit_rate)))
             
             # Get language name or use "text_N" as fallback
+            language_code = None
             if text_data_info.language and text_data_info.language != 'und':
                 try:
                     from external_asset_ism_ismc_generation_tool.common.common import Common
                     language_code, language_name = Common.get_language_3_code_and_name(text_data_info.language)
-                    name = language_name
+                    name = f"subs_{language_name}"
                 except Exception as e:
                     IsmcGenerator.__logger.warning(f"Could not resolve language '{text_data_info.language}': {e}")
                     name = f"{StreamType.TEXT.value}_{index}"
@@ -152,7 +153,8 @@ class IsmcGenerator:
                 chunks="1",
                 quality_levels="1",
                 url=url,
-                name=name
+                name=name,
+                language=language_code
             )
             IsmcGenerator.__logger.info(f'Text stream info: {stream_index}')
             for chunk in IsmcGenerator.__get_chunks(text_stream_timings=(text_data_info.start_time, text_data_info.duration), timescale=timescale):

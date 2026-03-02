@@ -1077,29 +1077,29 @@ class TestIsmcGeneration:
                             assert video_index.chunk_datas[0].duration
 
                     with Allure.Step("Verify StreamIndex attributes for text tracks"):
-                        # Separate IMSC (CMFT) and WVTT (VTT) tracks
-                        imsc_tracks = [
+                        # Check IMSC (CMFT) and WVTT (VTT) tracks
+                        cmft_tracks = [
                             t for t in text_indexes
                             if t.quality_level_list and t.quality_level_list[0].four_cc == 'IMSC'
                         ]
-                        wvtt_tracks = [
+                        vtt_tracks = [
                             t for t in text_indexes
                             if t.quality_level_list and t.quality_level_list[0].four_cc == 'WVTT'
                         ]
                         
-                        assert len(imsc_tracks) == 2  # 2 CMFT tracks
-                        assert len(wvtt_tracks) == 2  # 2 VTT tracks
+                        assert len(cmft_tracks) == 2  # 2 CMFT tracks
+                        assert len(vtt_tracks) == 2  # 2 VTT tracks
                         
-                        with Allure.Step("Verify IMSC (CMFT) text tracks"):
+                        with Allure.Step("Verify CMFT text tracks"):
                             # Check languages
-                            imsc_languages = sorted([t.language for t in imsc_tracks])
-                            assert imsc_languages == ['eng', 'fra']
+                            cmft_languages = sorted([t.language for t in cmft_tracks])
+                            assert cmft_languages == ['eng', 'fra']
                             
                             # Check names
-                            imsc_names = sorted([t.name for t in imsc_tracks])
-                            assert imsc_names == ['English', 'French']
+                            cmft_names = sorted([t.name for t in cmft_tracks])
+                            assert cmft_names == ['subs_English', 'subs_French']
                             
-                            for text_index in imsc_tracks:
+                            for text_index in cmft_tracks:
                                 assert text_index.stream_type == 'text'
                                 assert text_index.quality_levels == '1'
                                 assert text_index.language in ['eng', 'fra']
@@ -1114,15 +1114,19 @@ class TestIsmcGeneration:
                                 assert text_index.chunk_datas[0].time_start == '0'
                                 assert text_index.chunk_datas[0].duration == '40000000'
                         
-                        with Allure.Step("Verify WVTT (VTT) text tracks"):
-                            # VTT tracks from text_data_info_list don't have language in stream index
-                            # but should have names
-                            wvtt_names = sorted([t.name for t in wvtt_tracks])
-                            assert wvtt_names == ['English', 'French']
+                        with Allure.Step("Verify VTT text tracks"):
+                            # Check languages
+                            vtt_languages = sorted([t.language for t in vtt_tracks])
+                            assert vtt_languages == ['eng', 'fra']
+
+                            # Check names
+                            vtt_names = sorted([t.name for t in vtt_tracks])
+                            assert vtt_names == ['subs_English', 'subs_French']
                             
-                            for text_index in wvtt_tracks:
+                            for text_index in vtt_tracks:
                                 assert text_index.stream_type == 'text'
                                 assert text_index.quality_levels == '1'
+                                assert text_index.language in ['eng', 'fra']
                                 assert len(text_index.quality_level_list) == 1
                                 assert len(text_index.chunk_datas) > 0
                                 

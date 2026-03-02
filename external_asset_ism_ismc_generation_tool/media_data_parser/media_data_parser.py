@@ -210,7 +210,7 @@ class MediaDataParser:
                 try:
                     language_code, language_name = Common.get_language_3_code_and_name(track.language)
                     track.language = language_code
-                    track.track_name = language_name
+                    track.track_name = f"subs_{language_name}"
                 except Exception as e:
                     MediaDataParser.__logger.error(f"Text track - Could not resolve language '{track.language}': {e}")
                     track.track_name = "Undefined"

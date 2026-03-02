@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 from external_asset_ism_ismc_generation_tool.text_data_parser.vtt_to_imsc1_converter import VttToImsc1Converter
 from external_asset_ism_ismc_generation_tool.text_data_parser.imsc1_segmenter import Imsc1Segmenter
 from external_asset_ism_ismc_generation_tool.text_data_parser.cmft_packager import CmftPackager
+from external_asset_ism_ismc_generation_tool.text_data_parser.model.conversion_summary import ConversionSummary, ProcessingSummary
 from tests.test_utils.common.common import Common
 
 
@@ -541,6 +542,33 @@ def test_big_vtt_to_cmft_conversion():
     print(f"  Segments: {len(segments)}")
     print(f"  Duration: {total_duration:.2f}s")
     
+
+def test_conversion_disabled_message():
+    """Test that ProcessingSummary reports the correct message when convert_webvtt
+    is disabled but VTT files are present in the container."""
+    # Simulate the disabled summary built in main.py when convert_webvtt=False
+    # and the container contains VTT files.
+    disabled_summary = ConversionSummary(disabled=True)
+
+    # The summary line itself should reflect the disabled state
+    msg = disabled_summary.format_summary()
+    assert msg == "VTT Conversion: disabled (VTT files found but not converted)", \
+        f"Unexpected message: {msg}"
+
+    # The same message must appear inside the full ProcessingSummary output
+    overall = ProcessingSummary(conversion_summary=disabled_summary)
+    full_output = overall.format_summary()
+    assert "VTT Conversion: disabled (VTT files found but not converted)" in full_output, \
+        f"Expected disabled message not found in:\n{full_output}"
+
+    # Sanity-check: a summary with no VTT files and no disabled flag should
+    # NOT produce the disabled message.
+    no_vtt_summary = ConversionSummary()
+    assert "disabled" not in no_vtt_summary.format_summary()
+
+    print("\u2713 Disabled conversion message test passed")
+    print(f"  Message: '{msg}'")
+
 
 if __name__ == '__main__':
     print("Running VTT to CMFT conversion tests...\n")

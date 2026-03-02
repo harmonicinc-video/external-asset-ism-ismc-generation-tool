@@ -17,6 +17,7 @@ class ConversionSummary:
     total: int = 0
     successful: int = 0
     failed: int = 0
+    disabled: bool = False  # True when convert_webvtt=False but VTT files are present
     results: List[FileResult] = field(default_factory=list)
     
     def add_success(self, filename: str, warnings: List[str] = None):
@@ -33,6 +34,8 @@ class ConversionSummary:
     
     def format_summary(self) -> str:
         """Format a concise summary message."""
+        if self.disabled:
+            return "VTT Conversion: disabled (VTT files found but not converted)"
         if self.total == 0:
             return "No VTT files found to convert."
         
@@ -80,7 +83,7 @@ class ProcessingSummary:
         lines.append("="*70)
         
         # VTT Conversion section
-        if self.conversion_summary and self.conversion_summary.total > 0:
+        if self.conversion_summary is not None:
             lines.append("\n" + self.conversion_summary.format_summary())
         else:
             lines.append("\nVTT Conversion: No VTT files found")

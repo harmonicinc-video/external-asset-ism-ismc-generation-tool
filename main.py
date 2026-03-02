@@ -181,7 +181,17 @@ if __name__ == '__main__':
     if settings.get('convert_webvtt', False):
         conversion_summary = convert_vtt_to_cmft(settings, use_local=use_local)
         overall_summary.conversion_summary = conversion_summary
-    
+    else:
+        # convert_webvtt is disabled - check if VTT files exist and warn
+        if use_local:
+            local_file_service_client: LocalFileServiceClient = LocalFileServiceClient(settings)
+            vtt_found = any(f.name.lower().endswith('.vtt') for f in local_file_service_client.get_list_of_files())
+        else:
+            az_blob_service_client: AzureBlobServiceClient = AzureBlobServiceClient(settings)
+            vtt_found = any(b.name.lower().endswith('.vtt') for b in az_blob_service_client.get_list_of_blobs())
+        if vtt_found:
+            overall_summary.conversion_summary = ConversionSummary(disabled=True)
+
     if use_local:
         manifest_result = generate_manifests_local_use(settings)
     else:   

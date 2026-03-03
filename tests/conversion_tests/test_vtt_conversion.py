@@ -6,6 +6,7 @@ and compares the output with asset-test-vtt-syntax_ENG_REF.cmft reference file.
 """
 
 import os
+import struct
 import pytest
 import xml.etree.ElementTree as ET
 from external_asset_ism_ismc_generation_tool.text_data_parser.vtt_to_imsc1_converter import VttToImsc1Converter
@@ -13,6 +14,28 @@ from external_asset_ism_ismc_generation_tool.text_data_parser.imsc1_segmenter im
 from external_asset_ism_ismc_generation_tool.text_data_parser.cmft_packager import CmftPackager
 from external_asset_ism_ismc_generation_tool.text_data_parser.model.conversion_summary import ConversionSummary, ProcessingSummary
 from tests.test_utils.common.common import Common
+
+
+def _extract_track_id_from_cmft(cmft_data: bytes) -> int:
+    """Extract the track ID embedded in a CMFT binary by reading the trex box."""
+    def find_box(data: bytes, box_type: bytes) -> bytes:
+        i = 0
+        while i + 8 <= len(data):
+            size = struct.unpack('>I', data[i:i+4])[0]
+            if size < 8:
+                break
+            typ = data[i+4:i+8]
+            if typ == box_type:
+                return data[i:i+size]
+            i += size
+        return b''
+
+    # moov box starts after its own 8-byte header
+    moov = find_box(cmft_data, b'moov')
+    mvex = find_box(moov[8:], b'mvex')
+    trex = find_box(mvex[8:], b'trex')
+    # trex layout: 4 size + 4 type + 1 version + 3 flags + 4 track_ID
+    return struct.unpack('>I', trex[12:16])[0]
 
 
 def test_vtt_to_imsc1_conversion():
@@ -376,6 +399,22 @@ def test_cmft_packaging():
     assert b'mdat' in cmft_data
     
     print(f"✓ CMFT packaging successful: {len(cmft_data)} bytes")
+
+    # Verify track ID uniqueness: when a container has, say, 3 existing tracks
+    # (video=1, audio_deu=2, audio_eng=3), the first converted CMFT must get
+    # track_id=4 and the second track_id=5 so there are no clashes in the manifest.
+    # Simulate that scenario: existing max_track_id = 3, so CMFTs get 4 and 5.
+    cmft_track1 = CmftPackager.package(segments, timescale=10000000, total_duration=total_duration, track_id=4)
+    cmft_track2 = CmftPackager.package(segments, timescale=10000000, total_duration=total_duration, track_id=5)
+
+    assert _extract_track_id_from_cmft(cmft_track1) == 4, \
+        "First CMFT (after 3 existing tracks) must embed track_id=4"
+    assert _extract_track_id_from_cmft(cmft_track2) == 5, \
+        "Second CMFT (after 3 existing tracks) must embed track_id=5"
+    assert _extract_track_id_from_cmft(cmft_track1) != _extract_track_id_from_cmft(cmft_track2), \
+        "Two CMFTs must have different embedded track IDs"
+
+    print("✓ Track ID uniqueness verified: CMFT track IDs are unique and do not clash with existing media tracks")
 
 
 def test_full_vtt_to_cmft_conversion():

@@ -299,7 +299,8 @@ class TestIsmcGeneration:
     def test_check_generated_ismc_manifest_vtt(self):
         with Allure.Step("Prepare test data"):
             with Allure.Step("Get data from file"):
-                mp4_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_data.json'))['media_datas']
+                test_data = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_data.json'))
+                mp4_datas = test_data['media_datas']
                 assert mp4_datas
             with Allure.Step("Get media_track_info_list from mp4_datas"):
                 media_data: MediaData = MediaDataParser.get_media_data(mp4_datas)
@@ -307,7 +308,7 @@ class TestIsmcGeneration:
                 assert len(media_data.media_track_info_list) == 8
         with Allure.Step("Generate .ismc manifest base on media_track_info_list"):
             with Allure.Step("Generate .ismc manifest"):
-                text_data_info_list: List[TextDataInfo] = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_data.json'))['text_data_infos_list']
+                text_data_info_list: List[TextDataInfo] = test_data['text_data_infos_list']
                 ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration,
                                                          media_track_infos=media_data.media_track_info_list,
                                                          text_data_info_list=text_data_info_list)
@@ -349,7 +350,8 @@ class TestIsmcGeneration:
     def test_check_generated_ismc_manifest_ttml(self):
         with Allure.Step("Prepare test data"):
             with Allure.Step("Get data from file"):
-                mp4_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_ttml_data.json'))['media_datas']
+                test_data = Common.get_test_data_from_json(Common.get_data_file_path('test_ttml_data.json'))
+                mp4_datas = test_data['media_datas']
                 assert mp4_datas
             with Allure.Step("Get media_track_info_list from mp4_datas"):
                 media_data: MediaData = MediaDataParser.get_media_data(mp4_datas)
@@ -357,7 +359,7 @@ class TestIsmcGeneration:
                 assert len(media_data.media_track_info_list) == 3
         with Allure.Step("Generate .ismc manifest base on media_track_info_list"):
             with Allure.Step("Generate .ismc manifest"):
-                text_data_info_list: List[TextDataInfo] = Common.get_test_data_from_json(Common.get_data_file_path('test_ttml_data.json'))['text_data_infos_list']
+                text_data_info_list: List[TextDataInfo] = test_data['text_data_infos_list']
                 ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration,
                                                          media_track_infos=media_data.media_track_info_list,
                                                          text_data_info_list=text_data_info_list)
@@ -407,9 +409,10 @@ class TestIsmcGeneration:
     def test_check_generated_ismc_manifest_mp4_mpi_cmft(self):
         with Allure.Step("Prepare test data"):
             with Allure.Step("Get data from file"):
-                mp4_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_mpi_cmft_data.json'))['media_datas']
+                test_data = Common.get_test_data_from_json(Common.get_data_file_path('test_mpi_cmft_data.json'))
+                mp4_datas = test_data['media_datas']
                 assert mp4_datas
-                mp4_media_index_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_mpi_cmft_data.json'))['media_index_datas']
+                mp4_media_index_datas = test_data['media_index_datas']
                 assert mp4_media_index_datas
             with Allure.Step("Get media_track_info_list from mp4_datas"):
                 media_data: MediaData = MediaDataParser.get_media_data(media_datas=mp4_datas, media_index_datas=mp4_media_index_datas)
@@ -1006,9 +1009,10 @@ class TestIsmcGeneration:
     def test_asset_vtt_conversion(self):
         with Allure.Step("Prepare test data"):
             with Allure.Step("Get data from file"):
-                mp4_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_conversion_data.json'))['media_datas']
+                test_data = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_conversion_data.json'))
+                mp4_datas = test_data['media_datas']
                 assert mp4_datas
-                text_datas: List[TextDataInfo] = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_conversion_data.json'))['text_data_infos_list']
+                text_datas: List[TextDataInfo] = test_data['text_data_infos_list']
                 assert text_datas
             with Allure.Step("Get media_track_info_list from mp4_datas"):
                 media_data: MediaData = MediaDataParser.get_media_data(media_datas=mp4_datas)

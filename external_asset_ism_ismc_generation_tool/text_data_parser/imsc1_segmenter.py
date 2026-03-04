@@ -1,4 +1,4 @@
-from bisect import bisect_left, bisect_right
+from bisect import bisect_left
 from typing import List, Tuple
 from xml.etree import ElementTree as ET
 
@@ -98,18 +98,13 @@ class Imsc1Segmenter:
                 # A cue overlaps the segment [seg_start, seg_end) when:
                 #   cue.begin < seg_end  AND  cue.end > seg_start
                 #
-                # - Upper bound on begin_times: first index where begin >= seg_end
-                #   → all cues before this index have begin < seg_end
-                # - Lower bound: find the earliest cue whose end > seg_start.
-                #   Since cues are sorted by begin (not end), we conservatively
-                #   start scanning from the first cue whose begin could possibly
-                #   overlap, i.e. the latest cue that begins before the segment end.
-                #   A safe lower bound is the first cue whose end_time > seg_start;
-                #   we use bisect on end_times for that.
+                # Upper bound on begin_times: first index where begin >= seg_end
+                # → all cues before this index have begin < seg_end.
+                # We then filter by end_time > seg_start inside the loop,
+                # since end_times are NOT sorted (cues may overlap).
                 upper = bisect_left(begin_times, current_segment_end)
-                lower = bisect_right(end_times, current_segment_start, 0, upper)
                 
-                for begin_time, end_time, p_elem in cue_data[lower:upper]:
+                for begin_time, end_time, p_elem in cue_data[:upper]:
                     if end_time > current_segment_start:
                         # Create a copy of the cue element to modify its timing
                         cue_copy = ET.Element(p_elem.tag, attrib=p_elem.attrib.copy())

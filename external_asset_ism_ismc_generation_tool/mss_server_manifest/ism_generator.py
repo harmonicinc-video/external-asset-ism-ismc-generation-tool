@@ -110,6 +110,10 @@ class IsmGenerator:
     @staticmethod
     def __get_text_streams_from_text(text_datas: List[TextDataInfo], last_track_id: int) -> List[TextStream]:
         text_streams = []
+        # Track how many times each language has been seen to produce unique names.
+        # The first occurrence keeps the base name; subsequent ones get a digit appended
+        # (e.g. subs_English, subs_English1, subs_English2, …).
+        language_seen_counts: dict = {}
         for text_data in text_datas:
             last_track_id += 1
             
@@ -117,11 +121,16 @@ class IsmGenerator:
                 # Get track name from language code or use "Undefined" as fallback
                 try:
                     language_code, language_name = Common.get_language_3_code_and_name(text_data.language)
-                    track_name = f"subs_{language_name}"
+                    base_track_name = f"subs_{language_name}"
                 except Exception:
-                    track_name = "Undefined"
+                    base_track_name = "Undefined"
             else:
-                track_name = ""
+                base_track_name = ""
+            
+            lang_key = text_data.language or ""
+            count = language_seen_counts.get(lang_key, 0)
+            track_name = base_track_name + str(count) if count > 0 else base_track_name
+            language_seen_counts[lang_key] = count + 1
             
             text_stream = TextStream(
                 src=text_data.name, 

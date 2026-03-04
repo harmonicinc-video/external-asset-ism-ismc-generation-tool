@@ -757,8 +757,8 @@ class TestIsmGeneration:
                 text_datas: List[TextDataInfo] = Common.get_test_data_from_json(Common.get_data_file_path('test_vtt_conversion_data.json'))['text_data_infos_list']
                 text_streams = IsmGenerator.get_text_streams(media_track_infos=media_data.media_track_info_list, text_datas=text_datas)
                 assert text_streams
-                # 4 text streams: 2 CMFT + 2 VTT
-                assert len(text_streams) == 4
+                # 4 text streams: 2 CMFT + 3 VTT
+                assert len(text_streams) == 5
             with Allure.Step("Generate .ism manifest"):
                 server_manifest_name = f'{list(mp4_datas.keys())[0].split(".")[0]}'
                 ism_xml_string = IsmGenerator.generate(server_manifest_name, audios=audios, videos=videos, text_streams=text_streams)
@@ -807,11 +807,11 @@ class TestIsmGeneration:
                     with Allure.Step("Verify text streams"):
                         # Check IMSC (CMFT) and WVTT (VTT) tracks
                         text_streams = ism_object.body.text_streams
-                        assert len(text_streams) == 4
+                        assert len(text_streams) == 5
                         cmft_streams = [t for t in text_streams if t.src.lower().endswith('.cmft')]
                         vtt_streams = [t for t in text_streams if t.src.lower().endswith('.vtt')]
                         assert len(cmft_streams) == 2
-                        assert len(vtt_streams) == 2
+                        assert len(vtt_streams) == 3
 
                         with Allure.Step("Verify CMFT text tracks"):
                             # Check languages
@@ -836,11 +836,17 @@ class TestIsmGeneration:
                         with Allure.Step("Verify VTT text tracks"):
                             # Check languages
                             vtt_languages = sorted([t.system_language for t in vtt_streams])
-                            assert vtt_languages == ['eng', 'fra']
+                            assert vtt_languages == ['eng', 'eng', 'fra']
 
-                            # Check names
+                            # Check names: duplicate-language VTT files must get unique names by
+                            # appending a digit from the second occurrence onwards
+                            # (subs_English, subs_English1, …).  The same deduplication logic is
+                            # applied in the ISMC generator, so ISM trackName == ISMC Name.
                             vtt_track_names = sorted([t.params[1].value for t in vtt_streams])
-                            assert vtt_track_names == ['subs_English', 'subs_French']
+                            assert vtt_track_names == ['subs_English', 'subs_English1', 'subs_French']
+                            # All VTT track names must be unique within the manifest
+                            assert len(vtt_track_names) == len(set(vtt_track_names)), \
+                                "VTT track names must be unique in the ISM manifest"
 
                             for text in vtt_streams:
                                 assert text.src

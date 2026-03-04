@@ -1029,8 +1029,8 @@ class TestIsmcGeneration:
                     assert ismc_object.minor_version == '2'
                     assert ismc_object.time_scale == '10000000'
                     assert ismc_object.duration
-                    # Verify we have 2 audio + 1 video + 4 text (2 CMFT + 2 VTT) stream indexes
-                    assert len(ismc_object.stream_indexes) == 7
+                    # Verify we have 2 audio + 1 video + 5 text (2 CMFT + 3 VTT) stream indexes
+                    assert len(ismc_object.stream_indexes) == 8
                 with Allure.Step("Verify StreamIndexes"):
                     # Find indexes by type
                     audio_indexes = [idx for idx in ismc_object.stream_indexes if idx.stream_type == 'audio']
@@ -1039,7 +1039,7 @@ class TestIsmcGeneration:
                     
                     assert len(audio_indexes) == 2
                     assert len(video_indexes) == 1
-                    assert len(text_indexes) == 4
+                    assert len(text_indexes) == 5
                     
                     with Allure.Step("Verify StreamIndex attributes for the audio tracks"):
                         for audio_index in audio_indexes:
@@ -1088,7 +1088,7 @@ class TestIsmcGeneration:
                         ]
                         
                         assert len(cmft_tracks) == 2  # 2 CMFT tracks
-                        assert len(vtt_tracks) == 2  # 2 VTT tracks
+                        assert len(vtt_tracks) == 3  # 3 VTT tracks
                         
                         with Allure.Step("Verify CMFT text tracks"):
                             # Check languages
@@ -1112,16 +1112,22 @@ class TestIsmcGeneration:
                                 
                                 # Verify 4-second segment duration (40000000 at timescale 10000000)
                                 assert text_index.chunk_datas[0].time_start == '0'
-                                assert text_index.chunk_datas[0].duration == '40000000'
+                                assert text_index.chunk_datas[0].duration == '60000000'
                         
                         with Allure.Step("Verify VTT text tracks"):
                             # Check languages
                             vtt_languages = sorted([t.language for t in vtt_tracks])
-                            assert vtt_languages == ['eng', 'fra']
+                            assert vtt_languages == ['eng', 'eng', 'fra']
 
-                            # Check names
+                            # Check names: duplicate-language VTT files must get unique names by
+                            # appending a digit from the second occurrence onwards
+                            # (subs_English, subs_English1, …).  The ISMC Name matches the ISM
+                            # trackName because both generators apply the same deduplication logic.
                             vtt_names = sorted([t.name for t in vtt_tracks])
-                            assert vtt_names == ['subs_English', 'subs_French']
+                            assert vtt_names == ['subs_English', 'subs_English1', 'subs_French']
+                            # All VTT stream names must be unique within the manifest
+                            assert len(vtt_names) == len(set(vtt_names)), \
+                                "VTT ISMC stream names must be unique (and mirror ISM trackName)"
                             
                             for text_index in vtt_tracks:
                                 assert text_index.stream_type == 'text'

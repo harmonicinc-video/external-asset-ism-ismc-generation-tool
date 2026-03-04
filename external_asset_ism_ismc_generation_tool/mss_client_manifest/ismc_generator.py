@@ -131,6 +131,10 @@ class IsmcGenerator:
     @staticmethod
     def __get_text_stream_indexes_from_text_data_info_list(text_data_info_list: List[TextDataInfo], timescale: int) -> List[StreamIndex]:
         stream_indexes = []
+        # Track how many times each language has been seen to produce unique names.
+        # The first occurrence keeps the base name; subsequent ones get a digit appended
+        # (e.g. subs_English, subs_English1, subs_English2, …) — mirrors ISM trackName logic.
+        language_seen_counts: dict = {}
         for index, text_data_info in enumerate(text_data_info_list):
             quality_level = IsmcGenerator.__get_text_quality_levels(text_stream_info=(text_data_info.name, str(text_data_info.bit_rate)))
             
@@ -140,12 +144,17 @@ class IsmcGenerator:
                 try:
                     from external_asset_ism_ismc_generation_tool.common.common import Common
                     language_code, language_name = Common.get_language_3_code_and_name(text_data_info.language)
-                    name = f"subs_{language_name}"
+                    base_name = f"subs_{language_name}"
                 except Exception as e:
                     IsmcGenerator.__logger.warning(f"Could not resolve language '{text_data_info.language}': {e}")
-                    name = f"{StreamType.TEXT.value}_{index}"
+                    base_name = f"{StreamType.TEXT.value}_{index}"
             else:
-                name = f"{StreamType.TEXT.value}_{index}"
+                base_name = f"{StreamType.TEXT.value}_{index}"
+            
+            lang_key = text_data_info.language or ""
+            count = language_seen_counts.get(lang_key, 0)
+            name = base_name + str(count) if count > 0 else base_name
+            language_seen_counts[lang_key] = count + 1
             
             url = IsmcGenerator.__TEXT_STREAM_URL_PATTERN.format(text_stream_name=name)
             stream_index = StreamIndex(

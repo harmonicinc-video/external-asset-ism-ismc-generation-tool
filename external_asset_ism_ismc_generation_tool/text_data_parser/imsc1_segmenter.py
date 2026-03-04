@@ -1,3 +1,4 @@
+from bisect import bisect_left
 from typing import List, Tuple
 from xml.etree import ElementTree as ET
 
@@ -71,26 +72,40 @@ class Imsc1Segmenter:
             current_segment_start = 0.0
             current_segment_end = float(segment_duration)
             
-            # Get total duration from the last cue
-            last_p = p_elements[-1]
-            last_end_str = last_p.get('end', '')
-            total_duration = Imsc1Segmenter.__parse_time(last_end_str)
+            # Pre-parse all cue times once (avoids re-parsing inside the segment loop)
+            cue_data = []
+            for p_elem in p_elements:
+                begin_time = Imsc1Segmenter.__parse_time(p_elem.get('begin', ''))
+                end_time = Imsc1Segmenter.__parse_time(p_elem.get('end', ''))
+                cue_data.append((begin_time, end_time, p_elem))
+            
+            # Sort by begin time (should already be ordered, but makes bisect safe)
+            cue_data.sort(key=lambda c: c[0])
+            
+            # Separate lists for binary search
+            begin_times = [c[0] for c in cue_data]
+            end_times = [c[1] for c in cue_data]
+            
+            # Get total duration from the last cue end time
+            total_duration = max(end_times) if end_times else 0.0
             
             Imsc1Segmenter.__logger.info(f"Total subtitle duration: {total_duration}s")
             
-            # Create segments
+            # Create segments using binary search to find overlapping cues
             while current_segment_start < total_duration:
                 segment_cues = []
                 
-                for p_elem in p_elements:
-                    begin_str = p_elem.get('begin', '')
-                    end_str = p_elem.get('end', '')
-                    
-                    begin_time = Imsc1Segmenter.__parse_time(begin_str)
-                    end_time = Imsc1Segmenter.__parse_time(end_str)
-                    
-                    # Check if cue overlaps with current segment
-                    if begin_time < current_segment_end and end_time > current_segment_start:
+                # A cue overlaps the segment [seg_start, seg_end) when:
+                #   cue.begin < seg_end  AND  cue.end > seg_start
+                #
+                # Upper bound on begin_times: first index where begin >= seg_end
+                # → all cues before this index have begin < seg_end.
+                # We then filter by end_time > seg_start inside the loop,
+                # since end_times are NOT sorted (cues may overlap).
+                upper = bisect_left(begin_times, current_segment_end)
+                
+                for begin_time, end_time, p_elem in cue_data[:upper]:
+                    if end_time > current_segment_start:
                         # Create a copy of the cue element to modify its timing
                         cue_copy = ET.Element(p_elem.tag, attrib=p_elem.attrib.copy())
                         cue_copy.text = p_elem.text

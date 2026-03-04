@@ -37,6 +37,28 @@ class AzureMediaDataParser:
 
 
     @staticmethod
+    def get_moov_data(az_blob_service_client: AzureBlobServiceClient, blob_name: str) -> Dict[str, any]:
+        """
+        Download only the moov box from a media file, without fetching moof fragments.
+        Useful for lightweight track ID extraction without downloading the entire file.
+
+        Args:
+            az_blob_service_client: Azure blob service client
+            blob_name: Name of the media blob
+
+        Returns:
+            Dict with 'moov' key containing the moov box bytes and an empty 'moofs' list.
+        """
+        try:
+            _, moov_data, _ = AzureMediaDataParser.__find_atom(
+                az_blob_service_client, blob_name, AtomType.MOOV_ATOM_TYPE.value
+            )
+            return {AtomType.MOOV_ATOM_TYPE.value: moov_data, AzureMediaDataParser._MOOFS: []}
+        except Exception as e:
+            raise Exception(f"An unexpected error occurred getting moov data for {blob_name}: {str(e)}")
+
+
+    @staticmethod
     def __find_atom(az_blob_service_client: AzureBlobServiceClient, blob_name: str, atom_type_to_find: str, offset: int = 0) -> Tuple[int, bytes, int]:
         start_byte = offset
 

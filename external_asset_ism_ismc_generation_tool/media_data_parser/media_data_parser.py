@@ -218,12 +218,14 @@ class MediaDataParser:
                 track.track_name = ""
                 MediaDataParser.__logger.warning(f"Text track - No language code")
             
-            # Handle duplicate language names
-            if track not in text_track_names_list:
-                index = 0
-            if MediaDataParser.__is_different_track_id_same_language(track, text_track_names_list):
-                index += 1
-                track.track_name = track.track_name + str(index)
+            # Handle duplicate language names: count how many same-language tracks
+            # already exist and append a digit (1, 2, …) from the second occurrence.
+            # This mirrors the audio convention so each track name is unique.
+            same_lang_count = sum(
+                1 for t in text_track_names_list if t.language == track.language
+            )
+            if same_lang_count > 0:
+                track.track_name = track.track_name + str(same_lang_count)
             text_track_names_list.append(track)
         
         media_data.media_track_info_list = filtered_video_tracks + track_names_list + text_track_names_list

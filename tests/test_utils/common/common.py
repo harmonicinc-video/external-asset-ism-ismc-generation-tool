@@ -8,6 +8,8 @@ from external_asset_ism_ismc_generation_tool.text_data_parser.model.text_data_in
 
 class Common:
 
+    _test_data_cache: dict = {}
+
     @staticmethod
     def get_mp4_test_data_from_json(file_path: str) -> dict:
         with open(file_path, 'r') as test_data_file:
@@ -39,6 +41,9 @@ class Common:
 
     @staticmethod
     def get_test_data_from_json(file_path: str) -> dict:
+        if file_path in Common._test_data_cache:
+            return Common._test_data_cache[file_path]
+
         with open(file_path, 'r') as test_data_file:
             test_data_json = json.load(test_data_file)
 
@@ -49,10 +54,12 @@ class Common:
         media_datas = Common.__parse_mp4_data_json(media_datas_json)
         media_index_datas = Common.__parse_mp4_data_json(media_index_datas_json)
         text_data_infos_list = [TextDataInfo.from_dict(text_data_dict) for text_data_dict in text_data_infos_list_json]
-        return {"media_datas": media_datas,
+        result = {"media_datas": media_datas,
                 "media_index_datas": media_index_datas,
                 "text_data_infos_list": text_data_infos_list
                 }
+        Common._test_data_cache[file_path] = result
+        return result
 
     @staticmethod
     def get_test_text_data_from_json(file_path: str, cls) -> List[TextDataInfo]:

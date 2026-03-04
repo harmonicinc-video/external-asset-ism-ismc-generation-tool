@@ -761,7 +761,7 @@ class TestIsmGeneration:
                 text_datas: List[TextDataInfo] = test_data['text_data_infos_list']
                 text_streams = IsmGenerator.get_text_streams(media_track_infos=media_data.media_track_info_list, text_datas=text_datas)
                 assert text_streams
-                # 4 text streams: 2 CMFT + 3 VTT
+                # 5 text streams: 2 CMFT + 3 VTT
                 assert len(text_streams) == 5
             with Allure.Step("Generate .ism manifest"):
                 server_manifest_name = f'{list(mp4_datas.keys())[0].split(".")[0]}'

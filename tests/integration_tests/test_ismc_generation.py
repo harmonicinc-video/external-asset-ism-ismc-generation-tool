@@ -1114,7 +1114,7 @@ class TestIsmcGeneration:
                                 assert text_quality.bitrate
                                 assert text_quality.four_cc == 'IMSC'
                                 
-                                # Verify 4-second segment duration (40000000 at timescale 10000000)
+                                # Verify 6-second segment duration (60000000 at timescale 10000000)
                                 assert text_index.chunk_datas[0].time_start == '0'
                                 assert text_index.chunk_datas[0].duration == '60000000'
                         

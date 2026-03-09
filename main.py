@@ -77,9 +77,13 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
     # Generate and upload server manifest (.ism)
     server_manifest_name = f'{blob_media_data.manifest_name}.ism'
     
-    # Check if manifest already exists - if so, generate with '_new' suffix
+    # Find an available name: try base, then _new, _new2, _new3, ...
     if az_blob_service_client.blob_exists(server_manifest_name):
         server_manifest_name = f'{blob_media_data.manifest_name}_new.ism'
+        suffix_counter = 2
+        while az_blob_service_client.blob_exists(server_manifest_name):
+            server_manifest_name = f'{blob_media_data.manifest_name}_new{suffix_counter}.ism'
+            suffix_counter += 1
         logger.info(f"Existing manifest found, generating new manifest as {server_manifest_name}")
     
     audios = IsmGenerator.get_audios(media_track_infos=media_data.media_track_info_list)
@@ -95,13 +99,18 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
     az_blob_service_client.upload_blob_to_container(server_manifest_name, ism_xml_string, overwrite=False)
     logger.info(f"{server_manifest_name} is created and stored to the {az_blob_service_client.container_client.container_name} container")
     result.ism_created = True
+    result.ism_filename = server_manifest_name
 
     # Generate and upload client manifest (.ismc)
     client_manifest_name = f'{blob_media_data.manifest_name}.ismc'
     
-    # Check if manifest already exists - if so, generate with '_new' suffix
+    # Find an available name: try base, then _new, _new2, _new3, ...
     if az_blob_service_client.blob_exists(client_manifest_name):
         client_manifest_name = f'{blob_media_data.manifest_name}_new.ismc'
+        suffix_counter = 2
+        while az_blob_service_client.blob_exists(client_manifest_name):
+            client_manifest_name = f'{blob_media_data.manifest_name}_new{suffix_counter}.ismc'
+            suffix_counter += 1
         logger.info(f"Existing manifest found, generating new manifest as {client_manifest_name}")
     
     ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration, media_track_infos=media_data.media_track_info_list, text_data_info_list=blob_media_data.text_data_info_list)
@@ -115,6 +124,7 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
     logger.info(f"{client_manifest_name} is created and stored to the {az_blob_service_client.container_client.container_name} container")
 
     result.ismc_created = True
+    result.ismc_filename = client_manifest_name
     
     return result
 

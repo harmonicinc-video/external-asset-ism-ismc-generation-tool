@@ -23,11 +23,25 @@ class IsmGenerator:
         cls.__logger = logger
 
     @staticmethod
-    def generate(manifest_name: str, audios: Optional[list] = None, videos: Optional[list] = None, text_streams: Optional[list] = None) -> str:
+    def generate(manifest_name: str, audios: Optional[list] = None, videos: Optional[list] = None,
+                 text_streams: Optional[list] = None, client_manifest_name: Optional[str] = None) -> str:
+        """
+        Generate an ISM (server manifest) XML document.
+        
+        Args:
+            manifest_name: Base name of the asset (used for logging and as fallback
+                           for clientManifestRelativePath)
+            audios: Audio track descriptors
+            videos: Video track descriptors
+            text_streams: Text/subtitle track descriptors
+            client_manifest_name: Explicit ISMC filename to reference in the
+                                  clientManifestRelativePath meta field. When omitted,
+                                  defaults to "{manifest_name}.ismc".
+        """
         IsmGenerator.__logger.info(f'Create server manifest {manifest_name}.ism')
         ism_document = Smil()
 
-        ism_document.head = IsmGenerator.__fill_head(manifest_name)
+        ism_document.head = IsmGenerator.__fill_head(manifest_name, client_manifest_name)
         ism_document.body = IsmGenerator.__fill_body(audios, videos, text_streams)
         xml_ism = ism_document.to_xml()
         ET.indent(xml_ism)
@@ -35,11 +49,14 @@ class IsmGenerator:
         return ism_doc.decode("utf-8")
 
     @staticmethod
-    def __fill_head(manifest_name: str) -> Head:
+    def __fill_head(manifest_name: str, client_manifest_name: Optional[str] = None) -> Head:
         head = Head()
         head.add_meta("formats", "mp4")
         head.add_meta("fragmentsPerHLSSegment", "1")
-        head.add_meta("clientManifestRelativePath", f"{manifest_name}.ismc")
+        # Use the explicit ISMC name when provided (e.g. "asset_new.ismc"),
+        # otherwise fall back to the base name (e.g. "asset.ismc").
+        ismc_path = client_manifest_name if client_manifest_name else f"{manifest_name}.ismc"
+        head.add_meta("clientManifestRelativePath", ismc_path)
         return head
 
     @staticmethod

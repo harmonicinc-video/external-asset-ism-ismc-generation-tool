@@ -54,6 +54,70 @@ def convert_vtt_to_cmft(settings: dict, use_local: bool = False) -> ConversionSu
         # Return empty summary on error
         return ConversionSummary()
 
+def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
+                        server_manifest_name: str, client_manifest_name: str) -> tuple:
+    """
+    Generate ISM and ISMC manifest XML content.
+    Shared logic used by both Azure and local manifest generation flows.
+    
+    Args:
+        blob_media_data: Parsed blob/file media metadata
+        media_data: Parsed media track info and duration
+        server_manifest_name: Target filename for the ISM manifest
+        client_manifest_name: Target filename for the ISMC manifest
+        (used in the ISM's clientManifestRelativePath field)
+        
+    Returns:
+        Tuple of (ism_xml_string, ismc_xml_string)
+    """
+    audios = IsmGenerator.get_audios(media_track_infos=media_data.media_track_info_list)
+    videos = IsmGenerator.get_videos(media_track_infos=media_data.media_track_info_list)
+    text_streams = IsmGenerator.get_text_streams(media_data.media_track_info_list, blob_media_data.text_data_info_list)
+
+    ism_xml_string = IsmGenerator.generate(
+        blob_media_data.manifest_name,
+        audios=audios, videos=videos, text_streams=text_streams,
+        client_manifest_name=client_manifest_name
+    )
+    ismc_xml_string = IsmcGenerator.generate(
+        duration=media_data.media_duration,
+        media_track_infos=media_data.media_track_info_list,
+        text_data_info_list=blob_media_data.text_data_info_list
+    )
+    return ism_xml_string, ismc_xml_string
+
+
+def _find_available_manifest_names(base_name: str, blob_exists_fn) -> tuple:
+    """
+    Find a pair of ISM/ISMC filenames that don't conflict with existing blobs.
+    Both names share the same suffix to keep them consistent.
+    
+    Args:
+        base_name: The asset base name (without extension)
+        blob_exists_fn: Callable that checks if a blob name already exists
+        
+    Returns:
+        Tuple of (server_manifest_name, client_manifest_name)
+    """
+    logger: Logger = Logger("main")
+    server_manifest_name = f'{base_name}.ism'
+    client_manifest_name = f'{base_name}.ismc'
+
+    # If either the .ism or .ismc already exists, find a common suffix (_new, _new2, ...)
+    # where neither exists, so both manifests always have matching names.
+    if blob_exists_fn(server_manifest_name) or blob_exists_fn(client_manifest_name):
+        suffix = '_new'
+        suffix_counter = 2
+        while blob_exists_fn(f'{base_name}{suffix}.ism') or blob_exists_fn(f'{base_name}{suffix}.ismc'):
+            suffix = f'_new{suffix_counter}'
+            suffix_counter += 1
+        server_manifest_name = f'{base_name}{suffix}.ism'
+        client_manifest_name = f'{base_name}{suffix}.ismc'
+        logger.info(f"Existing manifest found, generating new manifests as {server_manifest_name} / {client_manifest_name}")
+
+    return server_manifest_name, client_manifest_name
+
+
 def generate_manifests_azure_use(settings: dict) -> ManifestResult:
     """
     Generate and upload server and client manifests (.ism and .ismc) to the Azure container.
@@ -73,60 +137,37 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
     media_data: MediaData = MediaDataParser.get_media_data(blob_media_data.media_datas, blob_media_data.media_index_datas, settings.get('is_multithreading', False))
 
     result = ManifestResult(manifest_name=blob_media_data.manifest_name)
-    
-    # Generate and upload server manifest (.ism)
-    server_manifest_name = f'{blob_media_data.manifest_name}.ism'
-    
-    # Find an available name: try base, then _new, _new2, _new3, ...
-    if az_blob_service_client.blob_exists(server_manifest_name):
-        server_manifest_name = f'{blob_media_data.manifest_name}_new.ism'
-        suffix_counter = 2
-        while az_blob_service_client.blob_exists(server_manifest_name):
-            server_manifest_name = f'{blob_media_data.manifest_name}_new{suffix_counter}.ism'
-            suffix_counter += 1
-        logger.info(f"Existing manifest found, generating new manifest as {server_manifest_name}")
-    
-    audios = IsmGenerator.get_audios(media_track_infos=media_data.media_track_info_list)
-    videos = IsmGenerator.get_videos(media_track_infos=media_data.media_track_info_list)
-    text_streams = IsmGenerator.get_text_streams(media_data.media_track_info_list, blob_media_data.text_data_info_list)
-    ism_xml_string = IsmGenerator.generate(blob_media_data.manifest_name, audios=audios, videos=videos, text_streams=text_streams)
 
-    # Create local copy of ISM file
-    if (settings.get('local_copy', False)):
+    # Determine matching ISM/ISMC names (with suffix if originals already exist)
+    server_manifest_name, client_manifest_name = _find_available_manifest_names(
+        blob_media_data.manifest_name, az_blob_service_client.blob_exists
+    )
+
+    # Generate both manifests
+    ism_xml_string, ismc_xml_string = _generate_manifests(
+        blob_media_data, media_data, server_manifest_name, client_manifest_name
+    )
+
+    # Optionally create local debug copies
+    if settings.get('local_copy', False):
         with open(server_manifest_name, 'wb') as f:
             f.write(ism_xml_string.encode('utf-8'))
+        with open(client_manifest_name, 'wb') as f:
+            f.write(ismc_xml_string.encode('utf-8'))
 
+    # Upload to Azure
     az_blob_service_client.upload_blob_to_container(server_manifest_name, ism_xml_string, overwrite=False)
     logger.info(f"{server_manifest_name} is created and stored to the {az_blob_service_client.container_client.container_name} container")
     result.ism_created = True
     result.ism_filename = server_manifest_name
 
-    # Generate and upload client manifest (.ismc)
-    client_manifest_name = f'{blob_media_data.manifest_name}.ismc'
-    
-    # Find an available name: try base, then _new, _new2, _new3, ...
-    if az_blob_service_client.blob_exists(client_manifest_name):
-        client_manifest_name = f'{blob_media_data.manifest_name}_new.ismc'
-        suffix_counter = 2
-        while az_blob_service_client.blob_exists(client_manifest_name):
-            client_manifest_name = f'{blob_media_data.manifest_name}_new{suffix_counter}.ismc'
-            suffix_counter += 1
-        logger.info(f"Existing manifest found, generating new manifest as {client_manifest_name}")
-    
-    ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration, media_track_infos=media_data.media_track_info_list, text_data_info_list=blob_media_data.text_data_info_list)
-
-    # Create local copy of ISMC file
-    if (settings.get('local_copy', False)):
-        with open(client_manifest_name, 'wb') as f:
-            f.write(ismc_xml_string.encode('utf-8'))
-
     az_blob_service_client.upload_blob_to_container(client_manifest_name, ismc_xml_string, overwrite=False)
     logger.info(f"{client_manifest_name} is created and stored to the {az_blob_service_client.container_client.container_name} container")
-
     result.ismc_created = True
     result.ismc_filename = client_manifest_name
     
     return result
+
 
 def generate_manifests_local_use(settings: dict) -> ManifestResult:
     """
@@ -139,38 +180,30 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
         ManifestResult with generation status
     """
     logger: Logger = Logger("main")
-    logger.info("Starting manifest generation process")
+    logger.info("Starting local manifest generation process")
 
-    logger.info("Using local directory mode")
     local_file_service_client: LocalFileServiceClient = LocalFileServiceClient(settings)
     blob_media_data: BlobMediaData = LocalDataHandler.get_data_from_local_files(local_file_service_client)
-    
     media_data: MediaData = MediaDataParser.get_media_data(blob_media_data.media_datas, blob_media_data.media_index_datas, settings.get('is_multithreading', False))
 
     result = ManifestResult(manifest_name=blob_media_data.manifest_name)
-    
-    # Generate and upload server manifest (.ism)
+
     server_manifest_name = f'{blob_media_data.manifest_name}.ism'
-            
-    audios = IsmGenerator.get_audios(media_track_infos=media_data.media_track_info_list)
-    videos = IsmGenerator.get_videos(media_track_infos=media_data.media_track_info_list)
-    text_streams = IsmGenerator.get_text_streams(media_data.media_track_info_list, blob_media_data.text_data_info_list)
-    ism_xml_string = IsmGenerator.generate(blob_media_data.manifest_name, audios=audios, videos=videos, text_streams=text_streams)
-    
+    client_manifest_name = f'{blob_media_data.manifest_name}.ismc'
+
+    # Generate both manifests
+    ism_xml_string, ismc_xml_string = _generate_manifests(
+        blob_media_data, media_data, server_manifest_name, client_manifest_name
+    )
+
+    # Write to local directory
     local_file_service_client.write_file(server_manifest_name, ism_xml_string)
     logger.info(f"{server_manifest_name} is created and stored to the {local_file_service_client.local_directory} directory")
-
     result.ism_created = True
     result.ism_filename = server_manifest_name
 
-    # Generate and upload client manifest (.ismc)
-    client_manifest_name = f'{blob_media_data.manifest_name}.ismc'
-    logger.info(f"Generating client manifest: {client_manifest_name}")
-
-    ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration, media_track_infos=media_data.media_track_info_list, text_data_info_list=blob_media_data.text_data_info_list)
     local_file_service_client.write_file(client_manifest_name, ismc_xml_string)
     logger.info(f"{client_manifest_name} is created and stored to the {local_file_service_client.local_directory} directory")
-
     result.ismc_created = True
     result.ismc_filename = client_manifest_name
 

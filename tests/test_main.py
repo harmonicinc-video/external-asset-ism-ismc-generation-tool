@@ -205,10 +205,11 @@ class TestGenerateManifestsAzure:
         # Setup
         settings = {'azure_connection': 'test'}
         
-        # Mock AzureBlobServiceClient - files exist
+        # Mock AzureBlobServiceClient - base files exist, _new files don't
         mock_client_instance = Mock()
         mock_client_instance.container_client.container_name = 'test-container'
-        mock_client_instance.blob_exists.return_value = True  # Files exist
+        # Return True for base names (triggering _new suffix), False for _new names (available)
+        mock_client_instance.blob_exists.side_effect = lambda name: name in ('test_manifest.ism', 'test_manifest.ismc')
         mock_client_instance.upload_blob_to_container = Mock()
         mock_azure_client.return_value = mock_client_instance
         

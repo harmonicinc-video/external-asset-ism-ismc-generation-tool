@@ -246,6 +246,115 @@ class TestGenerateManifestsAzure:
         assert 'test_manifest_new.ism' in upload_calls[0][0]
         assert 'test_manifest_new.ismc' in upload_calls[1][0]
 
+    @patch('main.IsmcGenerator')
+    @patch('main.IsmGenerator')
+    @patch('main.MediaDataParser')
+    @patch('main.BlobDataHandler')
+    @patch('main.AzureBlobServiceClient')
+    def test_generate_manifests_azure_multiple_existing_suffixes(
+        self,
+        mock_azure_client,
+        mock_blob_handler,
+        mock_media_parser,
+        mock_ism_gen,
+        mock_ismc_gen
+    ):
+        """Test suffix resolution when _new and _new2 already exist, expecting _new3"""
+        settings = {'azure_connection': 'test'}
+
+        # Base, _new, and _new2 all exist — only _new3 is available
+        existing_blobs = {
+            'test_manifest.ism', 'test_manifest.ismc',
+            'test_manifest_new.ism', 'test_manifest_new.ismc',
+            'test_manifest_new2.ism', 'test_manifest_new2.ismc',
+        }
+        mock_client_instance = Mock()
+        mock_client_instance.container_client.container_name = 'test-container'
+        mock_client_instance.blob_exists.side_effect = lambda name: name in existing_blobs
+        mock_client_instance.upload_blob_to_container = Mock()
+        mock_azure_client.return_value = mock_client_instance
+
+        mock_blob_data = Mock()
+        mock_blob_data.manifest_name = 'test_manifest'
+        mock_blob_data.media_datas = []
+        mock_blob_data.media_index_datas = []
+        mock_blob_data.text_data_info_list = []
+        mock_blob_handler.get_data_from_blobs.return_value = mock_blob_data
+
+        mock_media = Mock()
+        mock_media.media_track_info_list = []
+        mock_media.media_duration = 1000
+        mock_media_parser.get_media_data.return_value = mock_media
+
+        mock_ism_gen.get_audios.return_value = []
+        mock_ism_gen.get_videos.return_value = []
+        mock_ism_gen.get_text_streams.return_value = []
+        mock_ism_gen.generate.return_value = '<ism>xml content</ism>'
+        mock_ismc_gen.generate.return_value = '<ismc>xml content</ismc>'
+
+        result = generate_manifests_azure_use(settings)
+
+        assert result.ism_created is True
+        assert result.ismc_created is True
+        upload_calls = mock_client_instance.upload_blob_to_container.call_args_list
+        assert 'test_manifest_new3.ism' in upload_calls[0][0]
+        assert 'test_manifest_new3.ismc' in upload_calls[1][0]
+
+    @patch('main.IsmcGenerator')
+    @patch('main.IsmGenerator')
+    @patch('main.MediaDataParser')
+    @patch('main.BlobDataHandler')
+    @patch('main.AzureBlobServiceClient')
+    def test_generate_manifests_azure_partial_existing(
+        self,
+        mock_azure_client,
+        mock_blob_handler,
+        mock_media_parser,
+        mock_ism_gen,
+        mock_ismc_gen
+    ):
+        """Test suffix resolution when only the ISM exists but not the ISMC for _new"""
+        settings = {'azure_connection': 'test'}
+
+        # Base pair exists; _new.ism exists but _new.ismc does not — must skip to _new2
+        # to avoid having a mismatched pair
+        existing_blobs = {
+            'test_manifest.ism', 'test_manifest.ismc',
+            'test_manifest_new.ism',
+        }
+        mock_client_instance = Mock()
+        mock_client_instance.container_client.container_name = 'test-container'
+        mock_client_instance.blob_exists.side_effect = lambda name: name in existing_blobs
+        mock_client_instance.upload_blob_to_container = Mock()
+        mock_azure_client.return_value = mock_client_instance
+
+        mock_blob_data = Mock()
+        mock_blob_data.manifest_name = 'test_manifest'
+        mock_blob_data.media_datas = []
+        mock_blob_data.media_index_datas = []
+        mock_blob_data.text_data_info_list = []
+        mock_blob_handler.get_data_from_blobs.return_value = mock_blob_data
+
+        mock_media = Mock()
+        mock_media.media_track_info_list = []
+        mock_media.media_duration = 1000
+        mock_media_parser.get_media_data.return_value = mock_media
+
+        mock_ism_gen.get_audios.return_value = []
+        mock_ism_gen.get_videos.return_value = []
+        mock_ism_gen.get_text_streams.return_value = []
+        mock_ism_gen.generate.return_value = '<ism>xml content</ism>'
+        mock_ismc_gen.generate.return_value = '<ismc>xml content</ismc>'
+
+        result = generate_manifests_azure_use(settings)
+
+        assert result.ism_created is True
+        assert result.ismc_created is True
+        # _new is skipped because _new.ism already exists
+        upload_calls = mock_client_instance.upload_blob_to_container.call_args_list
+        assert 'test_manifest_new2.ism' in upload_calls[0][0]
+        assert 'test_manifest_new2.ismc' in upload_calls[1][0]
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

@@ -55,7 +55,7 @@ def convert_vtt_to_cmft(settings: dict, use_local: bool = False) -> ConversionSu
         return ConversionSummary()
 
 def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
-                        server_manifest_name: str, client_manifest_name: str) -> tuple:
+                        client_manifest_name: str) -> tuple:
     """
     Generate ISM and ISMC manifest XML content.
     Shared logic used by both Azure and local manifest generation flows.
@@ -63,9 +63,8 @@ def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
     Args:
         blob_media_data: Parsed blob/file media metadata
         media_data: Parsed media track info and duration
-        server_manifest_name: Target filename for the ISM manifest
-        client_manifest_name: Target filename for the ISMC manifest
-        (used in the ISM's clientManifestRelativePath field)
+        client_manifest_name: Target filename for the ISMC manifest,
+            referenced in the ISM's clientManifestRelativePath field
         
     Returns:
         Tuple of (ism_xml_string, ismc_xml_string)
@@ -145,7 +144,7 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
 
     # Generate both manifests
     ism_xml_string, ismc_xml_string = _generate_manifests(
-        blob_media_data, media_data, server_manifest_name, client_manifest_name
+        blob_media_data, media_data, client_manifest_name
     )
 
     # Optionally create local debug copies
@@ -193,7 +192,7 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
 
     # Generate both manifests
     ism_xml_string, ismc_xml_string = _generate_manifests(
-        blob_media_data, media_data, server_manifest_name, client_manifest_name
+        blob_media_data, media_data, client_manifest_name
     )
 
     # Write to local directory

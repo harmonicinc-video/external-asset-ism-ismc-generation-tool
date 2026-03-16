@@ -75,11 +75,12 @@ class Common:
     @staticmethod
     def extract_language_from_filename(filename: str) -> Optional[str]:
         """
-        Extract 3-letter language code from filename.
-        Searches for any 3-letter code separated by underscores or other delimiters,
-        and validates it using pycountry to ensure it's a valid ISO 639-2/T language code.
+        Extract language code from filename.
+        Searches for any 2-letter (ISO 639-1) or 3-letter (ISO 639-2/T) code
+        separated by underscores or other delimiters, and validates it using
+        pycountry to ensure it's a valid language code.
         This filters out file extensions like 'cmft', 'vtt' and other non-language codes.
-        Examples: espn1_ARA.cmft -> 'ara', asset-test-vtt-syntax_ENG.cmft -> 'eng'
+        Examples: espn1_ARA.cmft -> 'ara', asset_en.vtt -> 'eng'
         """
         # Remove extension
         name_without_ext = filename.rsplit('.', 1)[0]
@@ -87,31 +88,43 @@ class Common:
         # Split by underscores and other common delimiters
         parts = re.split(r'[_\-\.]', name_without_ext)
         
-        # Search through all parts for a valid language code
+        # First pass: look for 3-letter ISO 639-2/T codes (more specific, fewer false positives)
         for part in parts:
-            validated_code = Common.validate_and_extract_language_code(part)
-            if validated_code:
-                return validated_code
+            if len(part) == 3:
+                validated_code = Common.validate_and_extract_language_code(part)
+                if validated_code:
+                    return validated_code
+        
+        # Second pass: look for 2-letter ISO 639-1 codes (fallback)
+        for part in parts:
+            if len(part) == 2:
+                validated_code = Common.validate_and_extract_language_code(part)
+                if validated_code:
+                    return validated_code
         
         return 'und'  # Return 'und' if no valid code found
 
     @staticmethod
     def validate_and_extract_language_code(potential_code: str) -> Optional[str]:
         """
-        Validate if a string is a valid ISO 639-2/T language code using pycountry.
-        This filters out file extensions (vtt, mp4, cmft) and other non-language 3-letter words.
+        Validate if a string is a valid ISO 639-1 (2-letter) or ISO 639-2/T
+        (3-letter) language code using pycountry.
+        This filters out file extensions (vtt, mp4, cmft) and other non-language words.
         
         Args:
-            potential_code: A 3-letter string to validate
+            potential_code: A 2- or 3-letter string to validate
             
         Returns:
             ISO 639-2/T alpha_3 code if valid, None otherwise
         """
-        if not potential_code or len(potential_code) != 3 or not potential_code.isalpha():
+        if not potential_code or len(potential_code) not in (2, 3) or not potential_code.isalpha():
             return None
             
         try:
-            language_info = pycountry.languages.lookup(potential_code)
+            if len(potential_code) == 2:
+                language_info = pycountry.languages.get(alpha_2=potential_code.lower())
+            else:
+                language_info = pycountry.languages.lookup(potential_code)
             if language_info and hasattr(language_info, 'alpha_3'):
                 return language_info.alpha_3.lower()
         except LookupError:

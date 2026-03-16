@@ -151,7 +151,12 @@ class IsmcGenerator:
             else:
                 base_name = f"{StreamType.TEXT.value}_{index}"
             
-            lang_key = text_data_info.language or ""
+            # For defined languages, group by language so duplicates get a
+            # suffix (subs_English, subs_English1, …).  For undefined
+            # languages the base name already contains the index and is
+            # unique, so we key on the base name itself to avoid an
+            # unwanted dedup suffix (e.g. "text_11").
+            lang_key = text_data_info.language if text_data_info.language and text_data_info.language != 'und' else base_name
             count = language_seen_counts.get(lang_key, 0)
             name = base_name + str(count) if count > 0 else base_name
             language_seen_counts[lang_key] = count + 1

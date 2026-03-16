@@ -145,7 +145,12 @@ class IsmGenerator:
             else:
                 base_track_name = f"text_{index}"
             
-            lang_key = text_data.language or ""
+            # For defined languages, group by language so duplicates get a
+            # suffix (subs_English, subs_English1, …).  For undefined
+            # languages the base name already contains the index and is
+            # unique, so we key on the base name itself to avoid an
+            # unwanted dedup suffix (e.g. "text_11").
+            lang_key = text_data.language if text_data.language and text_data.language != 'und' else base_track_name
             count = language_seen_counts.get(lang_key, 0)
             track_name = base_track_name + str(count) if count > 0 else base_track_name
             language_seen_counts[lang_key] = count + 1

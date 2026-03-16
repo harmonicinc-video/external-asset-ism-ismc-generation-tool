@@ -609,6 +609,37 @@ def test_conversion_disabled_message():
     print(f"  Message: '{msg}'")
 
 
+def test_extract_language_from_filename():
+    """Test language code extraction from filenames with 2-letter and 3-letter codes."""
+    from external_asset_ism_ismc_generation_tool.common.common import Common
+
+    # 3-letter ISO 639-2/T codes (existing behavior)
+    assert Common.extract_language_from_filename("espn1_ENG.vtt") == "eng"
+    assert Common.extract_language_from_filename("espn1_FRE.vtt") == "fra"
+    assert Common.extract_language_from_filename("espn1_ARA.cmft") == "ara"
+    assert Common.extract_language_from_filename("espn1.ara.vtt") == "ara"
+    assert Common.extract_language_from_filename("ARA_espn1.vtt") == "ara"
+
+    # 2-letter ISO 639-1 codes
+    assert Common.extract_language_from_filename("espn1_en.vtt") == "eng"
+    assert Common.extract_language_from_filename("asset_fr.vtt") == "fra"
+    assert Common.extract_language_from_filename("asset_de.vtt") == "deu"
+    assert Common.extract_language_from_filename("asset_es.vtt") == "spa"
+    assert Common.extract_language_from_filename("asset_it.vtt") == "ita"
+    assert Common.extract_language_from_filename("asset-ja.vtt") == "jpn"
+
+    # 3-letter code takes priority over 2-letter code in the same filename
+    assert Common.extract_language_from_filename("asset_fr_ENG.vtt") == "eng"
+
+    # No valid language code -> 'und'
+    assert Common.extract_language_from_filename("espn1.vtt") == "und"
+    assert Common.extract_language_from_filename("espn1_480x270.vtt") == "und"
+    assert Common.extract_language_from_filename("espn1_HD.vtt") == "und"
+    assert Common.extract_language_from_filename("espn1_CC.vtt") == "und"
+
+    print("\u2713 Language extraction from filename test passed")
+
+
 if __name__ == '__main__':
     print("Running VTT to CMFT conversion tests...\n")
     

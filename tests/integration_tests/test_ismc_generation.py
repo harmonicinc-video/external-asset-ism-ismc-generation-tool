@@ -1147,3 +1147,39 @@ class TestIsmcGeneration:
                                 # VTT files may have different start times based on their content timing
                                 assert text_index.chunk_datas[0].time_start
                                 assert text_index.chunk_datas[0].duration
+
+    @title('Test ISMC Name for VTT text tracks without language code')
+    @description('When VTT files have no language code (und or None), the ISMC stream Name '
+                 'must match the ISM trackName — both should use "text" + dedup suffix.')
+    def test_ismc_text_stream_name_without_language(self):
+        """Regression test: ISMC used 'text_0' while ISM used '' for und language,
+        causing a mismatch that broke playback."""
+        with Allure.Step("Prepare text data with und and None language"):
+            text_datas = [
+                TextDataInfo(name="asset_subtitles.vtt", start_time=0, duration=60.0, bit_rate=200, language='und'),
+                TextDataInfo(name="asset_subtitles_2.vtt", start_time=0, duration=60.0, bit_rate=200, language='und'),
+                TextDataInfo(name="asset_subtitles_3.vtt", start_time=0, duration=60.0, bit_rate=200, language=None),
+            ]
+        with Allure.Step("Generate ISMC manifest with text-only data"):
+            ismc_xml_string = IsmcGenerator.generate(
+                duration=60, media_track_infos=[], text_data_info_list=text_datas)
+            assert ismc_xml_string
+        with Allure.Step("Verify ISMC manifest text stream names"):
+            ismc_object = IsmcManifestExtractor.extract(ismc_manifest_str=ismc_xml_string)
+            assert ismc_object
+            text_indexes = [idx for idx in ismc_object.stream_indexes if idx.stream_type == 'text']
+            assert len(text_indexes) == 3
+        with Allure.Step("Verify Name is never empty"):
+            for text_index in text_indexes:
+                assert text_index.name, \
+                    f"ISMC stream Name must not be empty for text track"
+        with Allure.Step("Verify Name values are unique"):
+            names = [t.name for t in text_indexes]
+            assert len(names) == len(set(names)), \
+                f"ISMC stream names must be unique, got: {names}"
+        with Allure.Step("Verify ISM trackName matches ISMC Name"):
+            from external_asset_ism_ismc_generation_tool.mss_server_manifest import IsmGenerator
+            ism_text_streams = IsmGenerator.get_text_streams(media_track_infos=[], text_datas=text_datas)
+            ism_track_names = [t.params[1]["value"] for t in ism_text_streams]
+            assert ism_track_names == names, \
+                f"ISM trackName {ism_track_names} must match ISMC Name {names}"

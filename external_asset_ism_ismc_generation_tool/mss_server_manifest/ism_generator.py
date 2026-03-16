@@ -113,14 +113,15 @@ class IsmGenerator:
     def __get_text_streams_from_media(media_track_infos: List[MediaTrackInfo]) -> List[TextStream]:
         text_streams = []
         text_tracks = list(track for track in media_track_infos if track.track_type == TrackType.TEXT)
-        for track in text_tracks:
+        for idx, track in enumerate(text_tracks):
+            track_name = track.track_name if track.track_name else f"text_{idx}"
             text_stream = TextStream(
                 src=track.blob_name, 
                 system_bitrate=track.bit_rate,
                 system_language=track.language
             )
             text_stream.add_param(name="trackID", value=str(track.track_id), value_type="data")
-            text_stream.add_param(name="trackName", value=track.track_name, value_type="data")
+            text_stream.add_param(name="trackName", value=track_name, value_type="data")
             text_streams.append(text_stream)
         return text_streams
 
@@ -131,7 +132,7 @@ class IsmGenerator:
         # The first occurrence keeps the base name; subsequent ones get a digit appended
         # (e.g. subs_English, subs_English1, subs_English2, …).
         language_seen_counts: dict = {}
-        for text_data in text_datas:
+        for index, text_data in enumerate(text_datas):
             last_track_id += 1
             
             if text_data.language and text_data.language != 'und':
@@ -142,7 +143,7 @@ class IsmGenerator:
                 except Exception:
                     base_track_name = "Undefined"
             else:
-                base_track_name = ""
+                base_track_name = f"text_{index}"
             
             lang_key = text_data.language or ""
             count = language_seen_counts.get(lang_key, 0)

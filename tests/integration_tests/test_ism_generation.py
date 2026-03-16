@@ -863,3 +863,29 @@ class TestIsmGeneration:
                                 assert text.params[1].name == "trackName"
                                 assert text.params[1].value_type == "data"
 
+    @title('Test ISM trackName for VTT text tracks without language code')
+    @description('When VTT files have no language code (und or None), the ISM trackName must '
+                 'not be empty — it should use a "text" + deduplication-suffix pattern that '
+                 'matches the ISMC Name, so that the ISMC URL pattern resolves correctly.')
+    def test_ism_text_track_name_without_language(self):
+        """Regression test: ISM trackName was empty for und/None language VTT files,
+        while ISMC used 'text_0' — causing a mismatch that broke playback."""
+        with Allure.Step("Prepare text data with und and None language"):
+            text_datas = [
+                TextDataInfo(name="asset_subtitles.vtt", start_time=0, duration=60.0, bit_rate=200, language='und'),
+                TextDataInfo(name="asset_subtitles_2.vtt", start_time=0, duration=60.0, bit_rate=200, language='und'),
+                TextDataInfo(name="asset_subtitles_3.vtt", start_time=0, duration=60.0, bit_rate=200, language=None),
+            ]
+        with Allure.Step("Generate text streams via ISM generator"):
+            text_streams = IsmGenerator.get_text_streams(media_track_infos=[], text_datas=text_datas)
+            assert len(text_streams) == 3
+        with Allure.Step("Verify trackName is never empty"):
+            for text in text_streams:
+                track_name = text.params[1]["value"]
+                assert track_name, f"trackName must not be empty for {text.src}"
+                assert text.params[1]["name"] == "trackName"
+        with Allure.Step("Verify trackName values are unique"):
+            track_names = [t.params[1]["value"] for t in text_streams]
+            assert len(track_names) == len(set(track_names)), \
+                f"trackName values must be unique, got: {track_names}"
+

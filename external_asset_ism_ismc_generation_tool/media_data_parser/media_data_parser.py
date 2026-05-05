@@ -1,3 +1,4 @@
+import math
 from typing import Tuple, Dict, List, Union
 from concurrent.futures import ProcessPoolExecutor
 from os import cpu_count
@@ -62,8 +63,22 @@ class MediaDataParser:
                 media_duration = mehd_atom["fragment_duration"] / mvhd_atom['timescale']
             trex_atom = MediaBoxExtractor.get_mp4_sub_box(mvex_atom, 'trex')
 
+            # First pass: determine IDR-aligned segment duration for audio/subtitle alignment
+            _SEGMENT_DURATION = 2  # seconds - same as in stts_parser
+            video_segment_duration_s = None
             for trak_atom in trak_atoms:
-                media_track_info_creator = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom)
+                extractor = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom)
+                if extractor.track_type == TrackType.VIDEO:
+                    key_frames = extractor.stss_parser.get_key_frames_numbers_from_stss()
+                    idr_period_ticks = extractor.stts_parser._STTSParser__get_idr_period_ticks(key_frames) if key_frames else None
+                    if idr_period_ticks is not None:
+                        idr_period_s = idr_period_ticks / extractor.timescale
+                        num_idr = math.ceil(_SEGMENT_DURATION / idr_period_s)
+                        video_segment_duration_s = num_idr * idr_period_s
+                    break
+
+            for trak_atom in trak_atoms:
+                media_track_info_creator = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom, video_segment_duration_s)
                 timescale = media_track_info_creator.timescale
                 MediaDataParser.__fill_moof_fragments_from_boxes(media_data.get(MediaDataParser._MOOFS), moof_fragments, trex_atom, timescale)
                 track_info = media_track_info_creator.get_track_info(moof_fragments)

@@ -889,3 +889,66 @@ class TestIsmGeneration:
             assert len(track_names) == len(set(track_names)), \
                 f"trackName values must be unique, got: {track_names}"
 
+    @title('Test Ism Generation for non-fragmented mp4 with 3.84s IDR-aligned segment duration')
+    @description('Test .ism manifest generation for a non-fragmented mp4 with periodic keyframes '
+                 'every 1.92s, producing IDR-aligned segments of 3.84s for both audio and video')
+    # Test data
+    #     Source file: services01-5.mp4
+    #     25fps, timescale=1000000, IDR period=48 frames (1.92s)
+    def test_asset_av_segment_duration(self):
+        with Allure.Step("Prepare test data"):
+            with Allure.Step("Get data from file"):
+                mp4_datas = Common.get_test_data_from_json(Common.get_data_file_path('test_av_segment_duration.json'))['media_datas']
+                assert mp4_datas
+            with Allure.Step("Get media_track_info_list from mp4_datas"):
+                media_data: MediaData = MediaDataParser.get_media_data(mp4_datas)
+                assert media_data.media_track_info_list
+                assert len(media_data.media_track_info_list) == 2
+        with Allure.Step("Generate .ism manifest base on media_track_info_list"):
+            with Allure.Step("Get audio tracks info"):
+                audios = IsmGenerator.get_audios(media_track_infos=media_data.media_track_info_list)
+                assert audios
+                assert len(audios) == 1
+            with Allure.Step("Get video tracks info"):
+                videos = IsmGenerator.get_videos(media_track_infos=media_data.media_track_info_list)
+                assert videos
+                assert len(videos) == 1
+            with Allure.Step("Generate .ism manifest"):
+                server_manifest_name = f'{list(mp4_datas.keys())[0].split(".")[0]}'
+                ism_xml_string = IsmGenerator.generate(server_manifest_name, audios=audios, videos=videos)
+                assert ism_xml_string
+            with Allure.Step("Verify .ism manifest"):
+                ism_object = IsmManifestExtractor.extract(ism_manifest_str=ism_xml_string)
+                assert ism_object
+                with Allure.Step("Verify ism manifest head"):
+                    assert ism_object.head
+                    meta_list = ism_object.head.meta_list
+                    assert meta_list
+                    assert len(meta_list) == 3
+                    assert meta_list[0].name == 'formats'
+                    assert meta_list[0].content == 'mp4'
+                    assert meta_list[1].name == 'fragmentsPerHLSSegment'
+                    assert meta_list[1].content == '1'
+                    assert meta_list[2].name == 'clientManifestRelativePath'
+                    assert meta_list[2].content == 'services01-5.ismc'
+                with Allure.Step("Verify ism manifest body"):
+                    with Allure.Step("Verify audios"):
+                        audios = ism_object.body.audios
+                        assert len(audios) == 1
+                        assert audios[0].src == 'services01-5.mp4'
+                        assert audios[0].system_bitrate == '189375'
+                        assert audios[0].system_language == 'qaa'
+                        assert audios[0].params[0].name == "trackID"
+                        assert audios[0].params[0].value == "2"
+                        assert audios[0].params[0].value_type == "data"
+                        assert audios[0].params[1].name == "trackName"
+                        assert audios[0].params[1].value == "Private Use"
+                        assert audios[0].params[1].value_type == "data"
+                    with Allure.Step("Verify videos"):
+                        videos = ism_object.body.videos
+                        assert len(videos) == 1
+                        assert videos[0].src == 'services01-5.mp4'
+                        assert videos[0].system_bitrate == '299965'
+                        assert videos[0].params[0].name == "trackID"
+                        assert videos[0].params[0].value == "1"
+                        assert videos[0].params[0].value_type == "data"

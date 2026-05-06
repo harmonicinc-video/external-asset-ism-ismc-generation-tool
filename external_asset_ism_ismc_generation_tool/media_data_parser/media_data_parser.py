@@ -65,20 +65,21 @@ class MediaDataParser:
 
             # First pass: determine IDR-aligned segment duration for audio/subtitle alignment
             _SEGMENT_DURATION = 2  # seconds - same as in stts_parser
-            video_segment_duration_s = None
+            video_segment_duration_ticks = None
+            video_timescale = None
             for trak_atom in trak_atoms:
                 extractor = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom)
                 if extractor.track_type == TrackType.VIDEO:
                     key_frames = extractor.stss_parser.get_key_frames_numbers_from_stss()
-                    idr_period_ticks = extractor.stts_parser._STTSParser__get_idr_period_ticks(key_frames) if key_frames else None
+                    idr_period_ticks = extractor.stts_parser.get_idr_period_ticks(key_frames)
                     if idr_period_ticks is not None:
-                        idr_period_s = idr_period_ticks / extractor.timescale
-                        num_idr = math.ceil(_SEGMENT_DURATION / idr_period_s)
-                        video_segment_duration_s = num_idr * idr_period_s
+                        video_timescale = extractor.timescale
+                        num_idr = math.ceil((_SEGMENT_DURATION * video_timescale) / idr_period_ticks)
+                        video_segment_duration_ticks = num_idr * idr_period_ticks
                     break
 
             for trak_atom in trak_atoms:
-                media_track_info_creator = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom, video_segment_duration_s)
+                media_track_info_creator = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom, video_segment_duration_ticks, video_timescale)
                 timescale = media_track_info_creator.timescale
                 MediaDataParser.__fill_moof_fragments_from_boxes(media_data.get(MediaDataParser._MOOFS), moof_fragments, trex_atom, timescale)
                 track_info = media_track_info_creator.get_track_info(moof_fragments)

@@ -30,7 +30,7 @@ class STTSParser:
             sample_info.append((cumulative, entry.sample_delta))
         return sample_info
 
-    def get_chunk_durations_from_stts(self, track_type: TrackType, timescale: int, key_frames_numbers: Optional[list] = None, segment_duration_s: Optional[float] = None) -> list:
+    def get_chunk_durations_from_stts(self, track_type: TrackType, timescale: int, key_frames_numbers: Optional[list] = None, segment_duration_ticks: Optional[int] = None) -> list:
         _SEGMENT_DURATION = 2  # seconds TODO: move to general settings
         chunk_durations: list = []
 
@@ -39,10 +39,10 @@ class STTSParser:
         chunk_duration = 0
 
         is_periodic_video = False
-        if segment_duration_s is not None:
-            segment_threshold = segment_duration_s * timescale
+        if segment_duration_ticks is not None:
+            segment_threshold = segment_duration_ticks
         elif track_type == TrackType.VIDEO and key_frames_numbers and len(key_frames_numbers) >= 2:
-            idr_period_ticks = self.__get_idr_period_ticks(key_frames_numbers)
+            idr_period_ticks = self.get_idr_period_ticks(key_frames_numbers)
             if idr_period_ticks is not None:
                 is_periodic_video = True
                 num_idr = math.ceil((_SEGMENT_DURATION * timescale) / idr_period_ticks)
@@ -67,9 +67,14 @@ class STTSParser:
 
         return chunk_durations
 
-    def __get_idr_period_ticks(self, key_frames_numbers: list) -> Optional[int]:
+    def get_idr_period_ticks(self, key_frames_numbers: list) -> Optional[int]:
         """Return the IDR period in ticks if keyframes are strictly periodic, None otherwise."""
-        sample_delta = self.stts_atom_entries[0].sample_delta
+        if not key_frames_numbers:
+            return None
+        # Requires constant sample_delta; bail out if STTS has variable frame durations
+        first_delta = self.stts_atom_entries[0].sample_delta
+        if not all(entry.sample_delta == first_delta for entry in self.stts_atom_entries):
+            return None
         num_to_check = min(len(key_frames_numbers) - 1, 10)
         if num_to_check < 2:
             return None
@@ -77,5 +82,5 @@ class STTSParser:
         first_interval = intervals[0]
         # All intervals must match (±1 sample tolerance for encoder rounding)
         if all(abs(iv - first_interval) <= 1 for iv in intervals):
-            return first_interval * sample_delta
+            return first_interval * first_delta
         return None

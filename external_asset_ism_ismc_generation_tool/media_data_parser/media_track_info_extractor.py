@@ -32,8 +32,9 @@ class MediaTrackInfoExtractor:
     def redefine_logger(cls, logger: ILogger):
         cls.__logger = logger
 
-    def __init__(self, trak_atom: Box, mvhd_duration: int, mvhd_timescale: int, blob_name: str, mvex_atom: Box, video_idr_period_s: float = None):
-        self.video_idr_period_s = video_idr_period_s
+    def __init__(self, trak_atom: Box, mvhd_duration: int, mvhd_timescale: int, blob_name: str, mvex_atom: Box, video_segment_duration_ticks: int = None, video_timescale: int = None):
+        self.video_segment_duration_ticks = video_segment_duration_ticks
+        self.video_timescale = video_timescale
         self.trak_parser = TRAKParser(trak_atom)
         mdia_atom = MediaBoxExtractor.get_mp4_sub_box(trak_atom, 'mdia')
         minf_atom = MediaBoxExtractor.get_mp4_sub_box(mdia_atom, 'minf')
@@ -130,7 +131,11 @@ class MediaTrackInfoExtractor:
         if moof_fragments:
             chunks, calculated_bit_rate = self.__extract_chunks_and_bitrate_from_moof(moof_fragments)
         else:
-            chunks = self.stts_parser.get_chunk_durations_from_stts(TrackType.AUDIO, self.timescale, segment_duration_s=self.video_idr_period_s)
+            # Convert video segment duration from video timescale to audio timescale (integer arithmetic)
+            audio_segment_ticks = None
+            if self.video_segment_duration_ticks is not None and self.video_timescale is not None:
+                audio_segment_ticks = self.video_segment_duration_ticks * self.timescale // self.video_timescale
+            chunks = self.stts_parser.get_chunk_durations_from_stts(TrackType.AUDIO, self.timescale, segment_duration_ticks=audio_segment_ticks)
             calculated_bit_rate = self.__calculate_bit_rate(self.track_size)
 
         audio_track_data: AudioTrackData = self.audio_parser.get_audio_track_data(calculated_bit_rate)

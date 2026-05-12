@@ -71,7 +71,7 @@ class STTSParser:
 
         return chunk_durations
 
-    def get_idr_period_ticks(self, key_frames_numbers: list, timescale: int = 0) -> Tuple[Optional[int], Optional[list]]:
+    def get_idr_period_ticks(self, key_frames_numbers: list, timescale: int) -> Tuple[Optional[int], Optional[list]]:
         """Return (IDR period in ticks, filtered IDR keyframe list).
 
         Phase 1: checks if all stss entries (or every Nth) are periodic — handles the case

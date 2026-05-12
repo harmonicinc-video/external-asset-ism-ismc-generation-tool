@@ -44,7 +44,8 @@ class STTSParser:
         elif track_type == TrackType.VIDEO and key_frames_numbers and len(key_frames_numbers) >= 2:
             idr_period_ticks, idr_keyframes = self.get_idr_period_ticks(key_frames_numbers)
             if idr_period_ticks is not None:
-                assert idr_keyframes is not None, "idr_keyframes must be set when idr_period_ticks is not None"
+                if idr_keyframes is None:
+                    raise ValueError("idr_keyframes must be set when idr_period_ticks is not None")
                 is_periodic_video = True
                 num_idr = math.ceil((_SEGMENT_DURATION * timescale) / idr_period_ticks)
                 segment_threshold = num_idr * idr_period_ticks

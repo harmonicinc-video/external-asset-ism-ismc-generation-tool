@@ -117,8 +117,8 @@ class STTSParser:
                             f'(IDR interval={first_interval} frames, period={period_ticks} ticks)')
                     return period_ticks, kf_list
                 # Period < min segment duration: could be non-IDR I-frames inflating stss.
-                # Save as fallback and keep looking for a longer periodic sub-sequence.
-                if fallback_result is None:
+                # Keep the longest sub-min candidate as fallback.
+                if fallback_result is None or period_ticks > fallback_result[0]:
                     fallback_result = (period_ticks, kf_list)
 
         # Phase 2: Max-interval approach (irregularly distributed non-IDR I-frames)

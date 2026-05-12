@@ -42,7 +42,7 @@ class STTSParser:
         if segment_duration_ticks is not None:
             segment_threshold = segment_duration_ticks
         elif track_type == TrackType.VIDEO and key_frames_numbers and len(key_frames_numbers) >= 2:
-            idr_period_ticks, idr_keyframes = self.get_idr_period_ticks(key_frames_numbers)
+            idr_period_ticks, idr_keyframes = self.get_idr_period_ticks(key_frames_numbers, timescale)
             if idr_period_ticks is not None:
                 if idr_keyframes is None:
                     raise ValueError("idr_keyframes must be set when idr_period_ticks is not None")
@@ -71,7 +71,7 @@ class STTSParser:
 
         return chunk_durations
 
-    def get_idr_period_ticks(self, key_frames_numbers: list) -> Tuple[Optional[int], Optional[list]]:
+    def get_idr_period_ticks(self, key_frames_numbers: list, timescale: int = 0) -> Tuple[Optional[int], Optional[list]]:
         """Return (IDR period in ticks, filtered IDR keyframe list).
 
         Phase 1: checks if all stss entries (or every Nth) are periodic — handles the case
@@ -81,6 +81,10 @@ class STTSParser:
         Phase 2: finds the largest interval between consecutive stss entries and verifies
         it forms a periodic sub-sequence — handles irregularly distributed non-IDR I-frames.
         Returns (None, None) when no periodic pattern is found.
+
+        Args:
+            key_frames_numbers: sync sample numbers from stss box.
+            timescale: track timescale in ticks per second (from mdhd box).
         """
         if not key_frames_numbers:
             return None, None
@@ -90,8 +94,6 @@ class STTSParser:
             return None, None
 
         _SEGMENT_DURATION = 2  # seconds — must match the constant in get_chunk_durations_from_stts
-        timescale = sum(e.sample_count * e.sample_delta for e in self.stts_atom_entries) / \
-                    sum(e.sample_count for e in self.stts_atom_entries)
         min_period_ticks = _SEGMENT_DURATION * timescale
 
         # Phase 1: Try sub-sampling factors (evenly distributed non-IDR I-frames)
@@ -155,11 +157,6 @@ class STTSParser:
                     STTSParser.__logger.info(
                         f'IDR period detected via max-interval: period={candidate_period} frames '
                         f'({period_ticks} ticks), starting from frame {first}')
-                    return period_ticks, idr_keyframes
-
-        # Fall back to the short-period result from Phase 1 if nothing better was found
-        if fallback_result is not None:
-            return fallback_resultting from frame {first}')
                     return period_ticks, idr_keyframes
 
         # Fall back to the short-period result from Phase 1 if nothing better was found

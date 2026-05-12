@@ -71,7 +71,7 @@ class MediaDataParser:
                 extractor = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom)
                 if extractor.track_type == TrackType.VIDEO:
                     key_frames = extractor.stss_parser.get_key_frames_numbers_from_stss()
-                    idr_period_ticks, _ = extractor.stts_parser.get_idr_period_ticks(key_frames)
+                    idr_period_ticks, _ = extractor.stts_parser.get_idr_period_ticks(key_frames, extractor.timescale)
                     if idr_period_ticks is not None:
                         video_timescale = extractor.timescale
                         num_idr = math.ceil((_SEGMENT_DURATION * video_timescale) / idr_period_ticks)

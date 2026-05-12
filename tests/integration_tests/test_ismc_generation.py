@@ -1331,7 +1331,7 @@ class TestIsmcGeneration:
                  'IDR and non-IDR I-frames at irregular intervals. IDR period is 48 frames (1.92s) '
                  'at 25fps, producing IDR-aligned segments of 3.84s for both audio and video')
     # Test data
-    #     Source file: assetHD25_JO_60s_UploadedBUcketS3.ts-1.mp4
+    #     Source file: assetHD25_JO_60s_UploadedBucketS3.ts-1.mp4
     #     25fps, timescale=90000, IDR period=48 frames (1.92s)
     #     stss contains 56 sync samples: 30 IDR + 26 non-IDR I-frames at irregular positions
     #     ceil(2/1.92)=2 → segment=2×1.92=3.84s → d=38400000 at output timescale 10000000

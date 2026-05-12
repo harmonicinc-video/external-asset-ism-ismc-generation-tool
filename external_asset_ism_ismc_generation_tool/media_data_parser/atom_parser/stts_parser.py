@@ -44,6 +44,7 @@ class STTSParser:
         elif track_type == TrackType.VIDEO and key_frames_numbers and len(key_frames_numbers) >= 2:
             idr_period_ticks, idr_keyframes = self.get_idr_period_ticks(key_frames_numbers)
             if idr_period_ticks is not None:
+                assert idr_keyframes is not None, "idr_keyframes must be set when idr_period_ticks is not None"
                 is_periodic_video = True
                 num_idr = math.ceil((_SEGMENT_DURATION * timescale) / idr_period_ticks)
                 segment_threshold = num_idr * idr_period_ticks
@@ -74,6 +75,8 @@ class STTSParser:
 
         Phase 1: checks if all stss entries (or every Nth) are periodic — handles the case
         where non-IDR I-frames are evenly distributed or absent.
+        When factor=1 yields a period shorter than the minimum segment duration, higher
+        factors are tried to find the true IDR-only sub-sequence.
         Phase 2: finds the largest interval between consecutive stss entries and verifies
         it forms a periodic sub-sequence — handles irregularly distributed non-IDR I-frames.
         Returns (None, None) when no periodic pattern is found.
@@ -85,8 +88,14 @@ class STTSParser:
         if not all(entry.sample_delta == first_delta for entry in self.stts_atom_entries):
             return None, None
 
+        _SEGMENT_DURATION = 2  # seconds — must match the constant in get_chunk_durations_from_stts
+        timescale = sum(e.sample_count * e.sample_delta for e in self.stts_atom_entries) / \
+                    sum(e.sample_count for e in self.stts_atom_entries)
+        min_period_ticks = _SEGMENT_DURATION * timescale
+
         # Phase 1: Try sub-sampling factors (evenly distributed non-IDR I-frames)
         max_factor = min(10, len(key_frames_numbers) - 1)
+        fallback_result = None
         for factor in range(1, max_factor + 1):
             subsampled = key_frames_numbers[::factor]
             num_to_check = min(len(subsampled) - 1, 10)
@@ -96,12 +105,18 @@ class STTSParser:
             first_interval = intervals[0]
             if all(abs(iv - first_interval) <= 1 for iv in intervals):
                 period_ticks = first_interval * first_delta
-                if factor == 1:
-                    return period_ticks, key_frames_numbers
-                STTSParser.__logger.info(
-                    f'IDR sub-sampling detected: every {factor}th sync sample is IDR '
-                    f'(IDR interval={first_interval} frames, period={period_ticks} ticks)')
-                return period_ticks, subsampled
+                kf_list = key_frames_numbers if factor == 1 else subsampled
+                if period_ticks >= min_period_ticks:
+                    # Period ≥ min segment duration — accept immediately
+                    if factor > 1:
+                        STTSParser.__logger.info(
+                            f'IDR sub-sampling detected: every {factor}th sync sample is IDR '
+                            f'(IDR interval={first_interval} frames, period={period_ticks} ticks)')
+                    return period_ticks, kf_list
+                # Period < min segment duration: could be non-IDR I-frames inflating stss.
+                # Save as fallback and keep looking for a longer periodic sub-sequence.
+                if fallback_result is None:
+                    fallback_result = (period_ticks, kf_list)
 
         # Phase 2: Max-interval approach (irregularly distributed non-IDR I-frames)
         if len(key_frames_numbers) >= 4:
@@ -140,5 +155,14 @@ class STTSParser:
                         f'IDR period detected via max-interval: period={candidate_period} frames '
                         f'({period_ticks} ticks), starting from frame {first}')
                     return period_ticks, idr_keyframes
+
+        # Fall back to the short-period result from Phase 1 if nothing better was found
+        if fallback_result is not None:
+            return fallback_resultting from frame {first}')
+                    return period_ticks, idr_keyframes
+
+        # Fall back to the short-period result from Phase 1 if nothing better was found
+        if fallback_result is not None:
+            return fallback_result
 
         return None, None

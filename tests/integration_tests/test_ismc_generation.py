@@ -1344,7 +1344,7 @@ class TestIsmcGeneration:
                 media_data: MediaData = MediaDataParser.get_media_data(mp4_datas)
                 assert media_data.media_track_info_list
                 assert len(media_data.media_track_info_list) == 3
-        with Allure.Step("Generate .ismc manifest base on media_track_info_list"):
+        with Allure.Step("Generate .ismc manifest based on media_track_info_list"):
             with Allure.Step("Generate .ismc manifest"):
                 ismc_xml_string = IsmcGenerator.generate(duration=media_data.media_duration,
                                                          media_track_infos=media_data.media_track_info_list)

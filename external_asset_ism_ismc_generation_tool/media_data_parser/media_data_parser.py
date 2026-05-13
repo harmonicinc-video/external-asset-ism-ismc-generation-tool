@@ -113,6 +113,14 @@ class MediaDataParser:
                                 f'Generated {len(idr_filtered_key_frames)} IDR sample numbers from period {idr_interval} '
                                 f'(validated against {len(stss_set)} STSS entries) for {blob_name}'
                             )
+                        else:
+                            # Not enough IDR samples to derive a period-based list;
+                            # discard partial subset to avoid degraded chunk splitting
+                            idr_filtered_key_frames = None
+                    else:
+                        # No stable period detected; discard the IDR subset so chunk splitting
+                        # falls back to the standard STSS-based or time-based segmentation
+                        idr_filtered_key_frames = None
                     break
 
             for trak_atom in trak_atoms:

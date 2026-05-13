@@ -136,7 +136,7 @@ The algorithm reads the STSS (Sync Sample) box to identify sync samples, then fe
 
 If the IDR interval is constant, it is used as the segment period (with a 2-second minimum, doubling the period if needed). If not constant, the tool falls back to fixed 2-second segments. This ensures manifest segments align with actual random access points whenever possible, enabling seamless playback start and stream switching.
 
-Supported video codecs: AVC (`avc1`, `avc3`) and HEVC (`hvc1`). For files without STSS data or for audio-only tracks, the original STSS list is used as-is without NAL filtering.
+Supported video codecs: AVC (`avc1`) and HEVC (`hvc1`). For files without STSS data or for audio-only tracks, the original STSS list is used as-is without NAL filtering.
 
 ## VTT to CMFT feature
 
@@ -232,4 +232,3 @@ The summary provides:
 - List of failed files with specific error reasons
 - Manifest generation status (created or skipped)
 - Appears at the end of processing, after both VTT conversion and manifest generation
-

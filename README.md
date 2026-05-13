@@ -128,6 +128,16 @@ python3 generate_test_data.py -output_name=<output_file_without_extension>
 - `mss_server_manifest/` - Generation of ISM manifest
 - `text_data_parser/` - Processing of text files (WebVTT and TTML)
 
+## IDR-Aligned Segment Detection
+
+For non-fragmented MP4 files that carry no segmentation info, the tool must determine a segment duration for the manifest. It does so by detecting IDR (Instantaneous Decoder Refresh) pictures — the only frames where a decoder can safely start playback.
+
+The algorithm reads the STSS (Sync Sample) box to identify sync samples, then fetches the first bytes of each sample's NAL units to verify whether they are true IDR frames (H.264 NAL type 5) or IRAP frames (H.265 NAL types 16–21), as opposed to non-IDR I-pictures which may also appear in STSS. Only the first 15 sync samples are inspected for efficiency.
+
+If the IDR interval is constant, it is used as the segment period (with a 2-second minimum, doubling the period if needed). If not constant, the tool falls back to fixed 2-second segments. This ensures manifest segments align with actual random access points whenever possible, enabling seamless playback start and stream switching.
+
+Supported video codecs: AVC (`avc1`) and HEVC (`hvc1`). For files without STSS data or for audio-only tracks, the original STSS list is used as-is without NAL filtering.
+
 ## VTT to CMFT feature
 
 A new feature has been added: converting WebVTT files found in the Azure container to CMFT files before manifest generation.
@@ -222,4 +232,3 @@ The summary provides:
 - List of failed files with specific error reasons
 - Manifest generation status (created or skipped)
 - Appears at the end of processing, after both VTT conversion and manifest generation
-

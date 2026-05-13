@@ -29,6 +29,12 @@ class Common:
                         decoded_inner_dict[inner_key] = [base64.b64decode(item) for item in value]
                     elif isinstance(value, str):
                         decoded_inner_dict[inner_key] = base64.b64decode(value)
+                    elif isinstance(value, dict):
+                        # Handle nested dicts like sync_sample_headers: {sample_num: base64_bytes}
+                        decoded_inner_dict[inner_key] = {
+                            k: base64.b64decode(v) if isinstance(v, str) else v
+                            for k, v in value.items()
+                        }
                     else:
                         decoded_inner_dict[inner_key] = value
                 media_datas[key] = decoded_inner_dict

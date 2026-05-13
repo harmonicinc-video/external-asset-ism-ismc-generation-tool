@@ -3,6 +3,7 @@ from external_asset_ism_ismc_generation_tool.common.logger.i_logger import ILogg
 from external_asset_ism_ismc_generation_tool.common.logger.logger import Logger
 from external_asset_ism_ismc_generation_tool.azure_client.azure_blob_service_client import AzureBlobServiceClient
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.atom.atom_type import AtomType
+from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.sync_sample_header_extractor import SyncSampleHeaderExtractor
 
 class AzureMediaDataParser:
     _MEDIA_HEADER_LENGTH = 8  # 8 bytes
@@ -30,6 +31,19 @@ class AzureMediaDataParser:
                 AzureMediaDataParser.__find_and_process_moof_atoms(remaining_data, media_data)
             else:
                 media_data[AzureMediaDataParser._MOOFS] = []
+
+            # Extract sync sample headers for NAL-based IDR detection (non-fragmented MP4 only)
+            if not media_data.get(AzureMediaDataParser._MOOFS):
+                try:
+                    file_reader = lambda offset, length: az_blob_service_client.download_part_of_blob(
+                        blob_name=blob_name, offset=offset, length=length
+                    )
+                    sync_headers = SyncSampleHeaderExtractor.extract_sync_sample_headers(moov_data, file_reader)
+                    if sync_headers:
+                        media_data['sync_sample_headers'] = sync_headers
+                except Exception as e:
+                    AzureMediaDataParser.__logger.warning(f'Failed to extract sync sample headers for {blob_name}: {e}')
+
         except Exception as e:
             raise Exception(f"An unexpected error occurred: {str(e)}")
 

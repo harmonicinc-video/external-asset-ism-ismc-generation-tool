@@ -41,7 +41,7 @@ class STSDParser:
         track_format = self.get_track_format()
         STSDParser.__logger.info(f'Get video codec private data for {track_format} track format')
         start_code = b'\x00\x00\x00\x01'.hex()
-        if track_format == TrackFormat.AVC1.value:
+        if TrackFormat.is_avc(track_format):
             avcc_box = AtomsDataParser.parse_avcc(next((box for box in self.stsd_atom.entries[0].remaining_boxes if box.type == b'avcC'), None))
             if not avcc_box:
                 STSDParser.__logger.warning(f'Cannot get avcc_atom from avcC box. Remaining boxes: {self.stsd_atom.entries[0].remaining_boxes}')
@@ -51,10 +51,10 @@ class STSDParser:
             # NAL unit identifier + picture parameters unit data in hex representation
             pps = start_code + avcc_box.picture_parameter
             return sps + pps
-        elif track_format == TrackFormat.HEVC1.value:
+        elif TrackFormat.is_hevc(track_format):
             hvcc_box = AtomsDataParser.parce_hvcc_data(next((box for box in self.stsd_atom.entries[0].remaining_boxes if box.type == b'hvcC'), None))
             if not hvcc_box:
-                STSDParser.__logger.warning(f'Cannot get hvcc_box from hvc1 box. Remaining boxes: {self.stsd_atom.entries[0].remaining_boxes}')
+                STSDParser.__logger.warning(f'Cannot get hvcc_box from hvcC box. Remaining boxes: {self.stsd_atom.entries[0].remaining_boxes}')
                 return ''
             if not hvcc_box.nalu_list:
                 STSDParser.__logger.warning(f'Cannot get NAL units from hvcC box. Remaining boxes: {self.stsd_atom.entries[0].remaining_boxes}')
@@ -103,6 +103,21 @@ class STSDParser:
         if hasattr(self.stsd_atom_entries[0], 'packet_size'):
             return self.stsd_atom_entries[0].packet_size
         # Return 0 if not found; will be calculated elsewhere based on format
+        return 0
+
+    def get_nalu_length_size(self) -> int:
+        """Get NAL unit length size from AVCC or HVCC box. Returns 0 if not found."""
+        track_format = self.get_track_format()
+        if TrackFormat.is_avc(track_format):
+            avcc_box = AtomsDataParser.parse_avcc(
+                next((box for box in self.stsd_atom.entries[0].remaining_boxes if box.type == b'avcC'), None)
+            )
+            return avcc_box.nalu_length_size if avcc_box else 0
+        elif TrackFormat.is_hevc(track_format):
+            hvcc_box = AtomsDataParser.parce_hvcc_data(
+                next((box for box in self.stsd_atom.entries[0].remaining_boxes if box.type == b'hvcC'), None)
+            )
+            return hvcc_box.nalu_length_size if hvcc_box else 0
         return 0
 
     def is_stpp(self) -> str:

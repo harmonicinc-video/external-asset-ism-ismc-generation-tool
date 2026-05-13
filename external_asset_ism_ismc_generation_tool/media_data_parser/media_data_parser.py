@@ -13,6 +13,7 @@ from external_asset_ism_ismc_generation_tool.media_data_parser.model.track_type 
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.media_track_info import MediaTrackInfo
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.media_data import MediaData
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.media_format import MediaFormat
+from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.nal_unit_type_parser import NalUnitTypeParser
 
 
 class MediaDataParser:
@@ -67,19 +68,63 @@ class MediaDataParser:
             _SEGMENT_DURATION = 2  # seconds - same as in stts_parser
             video_segment_duration_ticks = None
             video_timescale = None
+            idr_filtered_key_frames = None
             for trak_atom in trak_atoms:
                 extractor = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom)
                 if extractor.track_type == TrackType.VIDEO:
                     key_frames = extractor.stss_parser.get_key_frames_numbers_from_stss()
-                    idr_period_ticks = extractor.stts_parser.get_idr_period_ticks(key_frames)
+
+                    # Filter sync samples to true IDR/IRAP using NAL unit type parsing
+                    sync_sample_headers = media_data.get('sync_sample_headers')
+                    if key_frames and sync_sample_headers:
+                        codec_type = extractor.stsd_parser.get_track_format()
+                        nalu_length_size = extractor.stsd_parser.get_nalu_length_size()
+                        if nalu_length_size:
+                            idr_filtered_key_frames = NalUnitTypeParser.filter_idr_samples(
+                                key_frames, sync_sample_headers, codec_type, nalu_length_size
+                            )
+                            MediaDataParser.__logger.info(
+                                f'IDR filtering: {len(key_frames)} sync samples -> {len(idr_filtered_key_frames)} IDR samples for {blob_name}'
+                            )
+
+                    frames_for_period = idr_filtered_key_frames if idr_filtered_key_frames else key_frames
+                    idr_period_ticks = extractor.stts_parser.get_idr_period_ticks(frames_for_period)
                     if idr_period_ticks is not None:
                         video_timescale = extractor.timescale
                         num_idr = math.ceil((_SEGMENT_DURATION * video_timescale) / idr_period_ticks)
                         video_segment_duration_ticks = num_idr * idr_period_ticks
+
+                        # If IDR filtering was applied, generate complete IDR sample list
+                        # from the detected period for use in chunk splitting.
+                        # Intersect with the full STSS list to guard against ±1 sample
+                        # tolerance drift producing positions that aren't actual sync samples.
+                        if idr_filtered_key_frames and len(idr_filtered_key_frames) >= 2:
+                            first_idr = int(idr_filtered_key_frames[0])
+                            idr_interval = int(idr_filtered_key_frames[1]) - first_idr
+                            total_samples = extractor.stts_parser.get_sample_count()
+                            generated_positions = [
+                                str(first_idr + i * idr_interval)
+                                for i in range((total_samples - first_idr) // idr_interval + 1)
+                            ]
+                            # Only keep positions that are actual sync samples (present in STSS)
+                            stss_set = set(key_frames)
+                            idr_filtered_key_frames = [s for s in generated_positions if s in stss_set]
+                            MediaDataParser.__logger.info(
+                                f'Generated {len(idr_filtered_key_frames)} IDR sample numbers from period {idr_interval} '
+                                f'(validated against {len(stss_set)} STSS entries) for {blob_name}'
+                            )
+                        else:
+                            # Not enough IDR samples to derive a period-based list;
+                            # discard partial subset to avoid degraded chunk splitting
+                            idr_filtered_key_frames = None
+                    else:
+                        # No stable period detected; discard the IDR subset so chunk splitting
+                        # falls back to the standard STSS-based or time-based segmentation
+                        idr_filtered_key_frames = None
                     break
 
             for trak_atom in trak_atoms:
-                media_track_info_creator = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom, video_segment_duration_ticks, video_timescale)
+                media_track_info_creator = MediaTrackInfoExtractor(trak_atom, mvhd_atom['duration'], mvhd_atom['timescale'], blob_name, mvex_atom, video_segment_duration_ticks, video_timescale, idr_filtered_key_frames)
                 timescale = media_track_info_creator.timescale
                 MediaDataParser.__fill_moof_fragments_from_boxes(media_data.get(MediaDataParser._MOOFS), moof_fragments, trex_atom, timescale)
                 track_info = media_track_info_creator.get_track_info(moof_fragments)

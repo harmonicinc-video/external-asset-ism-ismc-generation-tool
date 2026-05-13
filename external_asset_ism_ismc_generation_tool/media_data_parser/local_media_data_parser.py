@@ -3,6 +3,7 @@ from external_asset_ism_ismc_generation_tool.common.logger.i_logger import ILogg
 from external_asset_ism_ismc_generation_tool.common.logger.logger import Logger
 from external_asset_ism_ismc_generation_tool.local_file_client.local_file_service_client import LocalFileServiceClient
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.atom.atom_type import AtomType
+from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.sync_sample_header_extractor import SyncSampleHeaderExtractor
 
 class LocalMediaDataParser:
     _MEDIA_HEADER_LENGTH = 8  # 8 bytes
@@ -30,6 +31,19 @@ class LocalMediaDataParser:
                 LocalMediaDataParser.__find_and_process_moof_atoms(remaining_data, media_data)
             else:
                 media_data[LocalMediaDataParser._MOOFS] = []
+
+            # Extract sync sample headers for NAL-based IDR detection (non-fragmented MP4 only)
+            if not media_data.get(LocalMediaDataParser._MOOFS):
+                try:
+                    file_reader = lambda offset, length: local_file_service_client.download_part_of_file(
+                        file_name=file_name, offset=offset, length=length
+                    )
+                    sync_headers = SyncSampleHeaderExtractor.extract_sync_sample_headers(moov_data, file_reader)
+                    if sync_headers:
+                        media_data['sync_sample_headers'] = sync_headers
+                except Exception as e:
+                    LocalMediaDataParser.__logger.warning(f'Failed to extract sync sample headers for {file_name}: {e}')
+
         except Exception as e:
             raise Exception(f"An unexpected error occurred: {str(e)}")
 

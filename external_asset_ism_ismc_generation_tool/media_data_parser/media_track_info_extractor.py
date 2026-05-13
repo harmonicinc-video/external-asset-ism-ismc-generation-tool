@@ -32,9 +32,10 @@ class MediaTrackInfoExtractor:
     def redefine_logger(cls, logger: ILogger):
         cls.__logger = logger
 
-    def __init__(self, trak_atom: Box, mvhd_duration: int, mvhd_timescale: int, blob_name: str, mvex_atom: Box, video_segment_duration_ticks: int = None, video_timescale: int = None):
+    def __init__(self, trak_atom: Box, mvhd_duration: int, mvhd_timescale: int, blob_name: str, mvex_atom: Box, video_segment_duration_ticks: int = None, video_timescale: int = None, idr_filtered_key_frames: list = None):
         self.video_segment_duration_ticks = video_segment_duration_ticks
         self.video_timescale = video_timescale
+        self.idr_filtered_key_frames = idr_filtered_key_frames
         self.trak_parser = TRAKParser(trak_atom)
         mdia_atom = MediaBoxExtractor.get_mp4_sub_box(trak_atom, 'mdia')
         minf_atom = MediaBoxExtractor.get_mp4_sub_box(mdia_atom, 'minf')
@@ -105,8 +106,14 @@ class MediaTrackInfoExtractor:
     def __extract_video_track_info(self, moof_fragments: dict) -> MediaTrackInfo:
         key_frames_numbers = self.stss_parser.get_key_frames_numbers_from_stss()
 
+        # Use IDR-filtered key frames if available (from NAL unit type parsing)
+        if self.idr_filtered_key_frames is not None:
+            key_frames_for_chunking = self.idr_filtered_key_frames
+        else:
+            key_frames_for_chunking = key_frames_numbers
+
         if key_frames_numbers:
-            chunks = self.stts_parser.get_chunk_durations_from_stts(TrackType.VIDEO, self.timescale, key_frames_numbers)
+            chunks = self.stts_parser.get_chunk_durations_from_stts(TrackType.VIDEO, self.timescale, key_frames_for_chunking)
             bitrate = self.__calculate_bit_rate(self.track_size)
         elif not self.mvex_atom:
             MediaTrackInfoExtractor.__logger.error('stss atom is not defined. Cannot get key frames numbers from stss atom')

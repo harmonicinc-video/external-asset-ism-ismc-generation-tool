@@ -4,7 +4,6 @@ from external_asset_ism_ismc_generation_tool.common.logger.i_logger import ILogg
 from external_asset_ism_ismc_generation_tool.common.logger.logger import Logger
 from external_asset_ism_ismc_generation_tool.media_data_parser.media_box_extractor.media_box_extractor import MediaBoxExtractor
 from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.sample_offset_calculator import SampleOffsetCalculator
-from external_asset_ism_ismc_generation_tool.media_data_parser.model.track_type import TrackType
 
 _MAX_SYNC_SAMPLES = 15
 _SAMPLE_HEADER_READ_SIZE = 192  # bytes - enough to skip non-VCL NALs (AUD+SPS+PPS+SEI) and reach VCL NAL header

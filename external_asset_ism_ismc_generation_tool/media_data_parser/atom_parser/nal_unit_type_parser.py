@@ -122,6 +122,6 @@ class NalUnitTypeParser:
             )
             return sync_sample_numbers
 
-        # Extend with remaining sync samples beyond max_samples (not checked but assumed pattern continues)
-        # Only return the checked IDR samples - the periodicity check only needs ~15
+        # Only return the checked IDR samples - the caller uses these for periodicity detection
+        # and then generates the full list from the detected period (validated against STSS)
         return idr_samples

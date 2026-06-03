@@ -183,18 +183,15 @@ class Common:
 
     @staticmethod
     def get_language_3_code_and_name(language_code: str):
-        """
-        Get the ISO 639-2/T code and language name for a given language code.
-        
+        """Resolve a language code to a `(language_code, language_name)` tuple.
+
         Behavior:
-        1. If code is in obsolete_language_codes, normalize it to current standard
-        2. If code is in private_use_language_codes, return predefined mapping
-        3. If code is a valid language code, preserve original code and resolve name
-           (this prevents normalizing 'dut' to 'nld', 'scr' to 'hrv', etc.)
-        4. Otherwise, try pycountry lookup as fallback
-        
-        This preserves original language codes (like 'dut' for Dutch) instead of
-        normalizing them to current ISO 639-2/T standards (like 'nld').
+        1) If code is in `obsolete_language_codes`, normalize it to the current standard
+        2) If code is in `private_use_language_codes`, return the predefined mapping
+        3) If code is a valid 3-letter ISO 639 code (including ISO 639-2/B), preserve the
+           original 3-letter code and resolve its name (prevents e.g. 'dut' -> 'nld')
+        4) If code is a valid 2-letter ISO 639-1 code, convert to ISO 639-2/T alpha_3 and resolve name
+        5) Otherwise, fall back to `pycountry` lookup; if lookup fails, return the input as both code and name
         """
         obsolete_language_codes = {
             'scr': 'hrv'  # Mapping 'scr' to 'hrv' for Croatian as 'scr' is obsolete now

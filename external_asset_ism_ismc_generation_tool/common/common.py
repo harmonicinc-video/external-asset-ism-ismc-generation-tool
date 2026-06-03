@@ -134,18 +134,17 @@ class Common:
         return None
 
     @staticmethod
-    def _is_valid_iso639_2t_code(language_code: str) -> bool:
+    def _is_valid_iso639_2t_code(language_code: str) -> Tuple[bool, Optional[str]]:
         """
-        Check if a code is a valid ISO 639-2/T (3-letter) language code.
-        This includes codes in alpha_3, alpha_2, and bibliographic fields.
-        This is used to preserve original language codes instead of normalizing them.
-        
+        Check if a code is a valid ISO 639 3-letter language code (terminologic or bibliographic).
+        This is used to preserve original 3-letter language codes instead of normalizing them.
+
         Args:
-            language_code: A language code to validate (typically 3 letters)
-            
+            language_code: A 3-letter language code to validate
+
         Returns:
-            Tuple (is_valid, normalized_code) where normalized_code is what pycountry returns.
-            If is_valid is True, it means the code resolves to a valid language.
+            (is_valid, normalized_alpha_3) where normalized_alpha_3 is the ISO 639-2/T alpha_3 from pycountry,
+            or None if pycountry doesn't provide one.
         """
         if not language_code or len(language_code) != 3 or not language_code.isalpha():
             return False, None

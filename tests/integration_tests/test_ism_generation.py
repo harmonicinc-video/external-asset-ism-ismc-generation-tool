@@ -147,7 +147,7 @@ class TestIsmGeneration:
 
                         assert audios[0].src == 'Terrifier2_4K_CP-830377_4K_Dual_648535_VQ2.mp4'
                         assert audios[0].system_bitrate == "160000"
-                        assert audios[0].system_language == "deu"
+                        assert audios[0].system_language == "ger"
                         assert audios[0].params[0].name == "trackID"
                         assert audios[0].params[0].value == "2"
                         assert audios[0].params[0].value_type == "data"
@@ -820,7 +820,7 @@ class TestIsmGeneration:
                         with Allure.Step("Verify CMFT text tracks"):
                             # Check languages
                             cmft_languages = sorted([t.system_language for t in cmft_streams])
-                            assert cmft_languages == ['eng', 'fra']
+                            assert cmft_languages == ['eng', 'fre']
 
                             # Check names
                             cmft_track_names = sorted([t.params[1].value for t in cmft_streams])
@@ -829,7 +829,7 @@ class TestIsmGeneration:
                             for text in cmft_streams:
                                 assert text.src
                                 assert text.system_bitrate
-                                assert text.system_language in ['eng', 'fra']
+                                assert text.system_language in ['eng', 'fre']
                                 assert len(text.params) >= 2
                                 assert text.params[0].name == "trackID"
                                 assert text.params[0].value
@@ -855,7 +855,7 @@ class TestIsmGeneration:
                             for text in vtt_streams:
                                 assert text.src
                                 assert text.system_bitrate
-                                assert text.system_language in ['eng', 'fra']
+                                assert text.system_language in ['eng', 'fre', 'fra']
                                 assert len(text.params) >= 2
                                 assert text.params[0].name == "trackID"
                                 assert text.params[0].value

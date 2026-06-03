@@ -134,7 +134,65 @@ class Common:
         return None
 
     @staticmethod
+    def _is_valid_iso639_2t_code(language_code: str) -> Tuple[bool, Optional[str]]:
+        """
+        Check if a code is a valid ISO 639 3-letter language code (terminologic or bibliographic).
+        This is used to preserve original 3-letter language codes instead of normalizing them.
+
+        Args:
+            language_code: A 3-letter language code to validate
+
+        Returns:
+            (is_valid, normalized_alpha_3) where normalized_alpha_3 is the ISO 639-2/T alpha_3 from pycountry,
+            or None if pycountry doesn't provide one.
+        """
+        if not language_code or len(language_code) != 3 or not language_code.isalpha():
+            return False, None
+        
+        try:
+            # Try lookup which handles alpha_2, alpha_3, and bibliographic codes
+            language_info = pycountry.languages.lookup(language_code.lower())
+            if language_info:
+                # Return True and the normalized code from pycountry
+                return True, language_info.alpha_3.lower() if hasattr(language_info, 'alpha_3') else None
+        except LookupError:
+            pass
+        
+        return False, None
+
+    @staticmethod
+    def _get_language_name(language_code: str) -> str:
+        """
+        Get the human-readable name for a language code.
+        Handles ISO 639-1, ISO 639-2/T, and ISO 639-2/B codes.
+        
+        Args:
+            language_code: A language code (2 or 3 letters)
+            
+        Returns:
+            Language name or the code itself if lookup fails
+        """
+        try:
+            language_info = pycountry.languages.lookup(language_code)
+            if language_info and hasattr(language_info, 'name'):
+                return language_info.name
+        except LookupError:
+            pass
+        
+        return language_code
+
+    @staticmethod
     def get_language_3_code_and_name(language_code: str):
+        """Resolve a language code to a `(language_code, language_name)` tuple.
+
+        Behavior:
+        1) If code is in `obsolete_language_codes`, normalize it to the current standard
+        2) If code is in `private_use_language_codes`, return the predefined mapping
+        3) If code is a valid 3-letter ISO 639 code (including ISO 639-2/B), preserve the
+           original 3-letter code and resolve its name (prevents e.g. 'dut' -> 'nld')
+        4) If code is a valid 2-letter ISO 639-1 code, convert to ISO 639-2/T alpha_3 and resolve name
+        5) Otherwise, fall back to `pycountry` lookup; if lookup fails, return the input as both code and name
+        """
         obsolete_language_codes = {
             'scr': 'hrv'  # Mapping 'scr' to 'hrv' for Croatian as 'scr' is obsolete now
             }
@@ -167,16 +225,40 @@ class Common:
             'qax': ('qax', 'Private Use'),
         }
 
+        # Step 1: Handle obsolete language codes (normalize to current standard)
         if language_code in obsolete_language_codes:
             language_code = obsolete_language_codes[language_code]
 
+        # Step 2: Handle private use language codes
         if language_code in private_use_language_codes:
             return private_use_language_codes[language_code]
 
+        # Step 3: Check if code is valid and potentially needs preservation
+        # This handles cases like 'dut' (bibliographic code for Dutch) which
+        # pycountry normalizes to 'nld'. We want to preserve the original 'dut'.
+        is_valid, normalized_code = Common._is_valid_iso639_2t_code(language_code)
+        if is_valid and normalized_code:
+            # Code is valid. Check if it's a 3-letter code (preserve it)
+            if len(language_code) == 3 and language_code.lower().isalpha():
+                # Preserve the original 3-letter code instead of using normalized one
+                language_name = Common._get_language_name(language_code)
+                return language_code, language_name
+
+        # Step 4: Try pycountry get() for 2-letter codes (more reliable than lookup())
+        if len(language_code) == 2 and language_code.isalpha():
+            try:
+                language_info = pycountry.languages.get(alpha_2=language_code.lower())
+                if language_info and hasattr(language_info, 'alpha_3'):
+                    return language_info.alpha_3.lower(), language_info.name
+            except Exception:
+                pass
+
+        # Step 5: Fall back to pycountry lookup for other codes
         try:
             language_info = pycountry.languages.lookup(language_code)
-            if language_info:
-                return language_info.alpha_3, language_info.name
+            if language_info and hasattr(language_info, 'alpha_3'):
+                # Return the alpha_3 code and name
+                return language_info.alpha_3.lower(), language_info.name
             else:
                 return language_code, language_code
         except LookupError:

@@ -184,7 +184,7 @@ class TestIsmcGeneration:
                 with Allure.Step("Verify StreamIndexes"):
                     with Allure.Step("Verify StreamIndexes attributes for the first audio track"):
                         assert ismc_object.stream_indexes[0].chunks == '4140'
-                        assert ismc_object.stream_indexes[0].language == 'deu'
+                        assert ismc_object.stream_indexes[0].language == 'ger'
                         assert ismc_object.stream_indexes[0].name == 'German'
                         assert ismc_object.stream_indexes[0].quality_levels == '1'
                         assert ismc_object.stream_indexes[0].stream_type == 'audio'
@@ -326,7 +326,7 @@ class TestIsmcGeneration:
                     with Allure.Step("Verify StreamIndex attributes for the first audio track (German)"):
                         assert ismc_object.stream_indexes[0].chunks == '4140'
                         assert ismc_object.stream_indexes[0].name == 'German'
-                        assert ismc_object.stream_indexes[0].language == 'deu'
+                        assert ismc_object.stream_indexes[0].language == 'ger'
                         assert ismc_object.stream_indexes[0].stream_type == 'audio'
                         assert len(ismc_object.stream_indexes[0].chunk_datas) == 2761
                         with Allure.Step("Verify c elements attributes for the first audio track"):
@@ -401,7 +401,7 @@ class TestIsmcGeneration:
                     with Allure.Step("Verify StreamIndex attributes for the first audio track"):
                         assert ismc_object.stream_indexes[0].chunks == '4140'
                         assert ismc_object.stream_indexes[0].name == 'German'
-                        assert ismc_object.stream_indexes[0].language == 'deu'
+                        assert ismc_object.stream_indexes[0].language == 'ger'
                         assert ismc_object.stream_indexes[0].stream_type == 'audio'
                         assert len(ismc_object.stream_indexes[0].chunk_datas) == 2761
                         with Allure.Step("Verify c elements attributes for the first audio track"):
@@ -1157,7 +1157,7 @@ class TestIsmcGeneration:
                         with Allure.Step("Verify CMFT text tracks"):
                             # Check languages
                             cmft_languages = sorted([t.language for t in cmft_tracks])
-                            assert cmft_languages == ['eng', 'fra']
+                            assert cmft_languages == ['eng', 'fre']
                             
                             # Check names
                             cmft_names = sorted([t.name for t in cmft_tracks])
@@ -1166,7 +1166,7 @@ class TestIsmcGeneration:
                             for text_index in cmft_tracks:
                                 assert text_index.stream_type == 'text'
                                 assert text_index.quality_levels == '1'
-                                assert text_index.language in ['eng', 'fra']
+                                assert text_index.language in ['eng', 'fre']
                                 assert len(text_index.quality_level_list) == 1
                                 assert len(text_index.chunk_datas) == 2
                                 
@@ -1360,7 +1360,7 @@ class TestIsmcGeneration:
                 with Allure.Step("Verify StreamIndexes"):
                     with Allure.Step("Verify StreamIndex attributes for the first audio track (Dutch)"):
                         assert ismc_object.stream_indexes[0].chunks == '16'
-                        assert ismc_object.stream_indexes[0].language == 'nld'
+                        assert ismc_object.stream_indexes[0].language == 'dut'
                         assert ismc_object.stream_indexes[0].name == 'Dutch'
                         assert ismc_object.stream_indexes[0].quality_levels == '1'
                         assert ismc_object.stream_indexes[0].stream_type == 'audio'

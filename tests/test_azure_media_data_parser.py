@@ -83,3 +83,26 @@ class TestExtendedBoxSize:
 
         with pytest.raises(Exception, match="Invalid atom size"):
             AzureMediaDataParser.get_media_data(client, "invalid_size.mp4")
+
+    def test_get_media_data_raises_for_truncated_extended_size(self):
+        # The blob ends before the full 8-byte 'largesize' field is available;
+        # a short read must not be silently decoded as a valid (smaller) size.
+        ftyp = _box(b"ftyp", b"isom")
+        truncated_mdat = struct.pack(">I", 1) + b"mdat" + b"\x00\x00\x00"  # only 3 of 8 largesize bytes
+
+        client = FakeAzureBlobServiceClient(ftyp + truncated_mdat)
+
+        with pytest.raises(Exception, match="Truncated extended size field"):
+            AzureMediaDataParser.get_media_data(client, "truncated_extended_size.mp4")
+
+    def test_find_and_process_moof_atoms_raises_for_truncated_extended_size(self):
+        # Same truncated 'largesize' scenario, but hit via the in-memory moof scan.
+        ftyp = _box(b"ftyp", b"isom")
+        moov = _box(b"moov", b"mvex" + b"\x00" * 8)
+        moof1 = _box(b"moof", b"F" * 16)
+        truncated_mdat = struct.pack(">I", 1) + b"mdat" + b"\x00\x00\x00"  # only 3 of 8 largesize bytes
+
+        client = FakeAzureBlobServiceClient(ftyp + moov + moof1 + truncated_mdat)
+
+        with pytest.raises(Exception, match="Truncated extended size field"):
+            AzureMediaDataParser.get_media_data(client, "fragmented_truncated_extended_size.mp4")

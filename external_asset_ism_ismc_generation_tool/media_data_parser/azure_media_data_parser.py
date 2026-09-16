@@ -102,6 +102,11 @@ class AzureMediaDataParser:
                     )
                 except Exception as e:
                     raise Exception(f"Error downloading extended size at offset {atom_start + header_length}: {str(e)}")
+                if len(largesize_data) != AzureMediaDataParser._LARGESIZE_LENGTH:
+                    raise ValueError(
+                        f"Truncated extended size field for atom '{atom_type}' at offset {atom_start + header_length}: "
+                        f"expected {AzureMediaDataParser._LARGESIZE_LENGTH} bytes, got {len(largesize_data)}"
+                    )
                 atom_size = int.from_bytes(largesize_data, byteorder='big')
                 atom_header_data += largesize_data
                 header_length += AzureMediaDataParser._LARGESIZE_LENGTH
@@ -148,6 +153,11 @@ class AzureMediaDataParser:
         if atom_size == 1:
             largesize_offset = offset + header_length
             largesize_data = data[largesize_offset:largesize_offset + AzureMediaDataParser._LARGESIZE_LENGTH]
+            if len(largesize_data) != AzureMediaDataParser._LARGESIZE_LENGTH:
+                raise ValueError(
+                    f"Truncated extended size field for atom '{atom_type}' at offset {largesize_offset}: "
+                    f"expected {AzureMediaDataParser._LARGESIZE_LENGTH} bytes, got {len(largesize_data)}"
+                )
             atom_size = int.from_bytes(largesize_data, byteorder='big')
             header_length += AzureMediaDataParser._LARGESIZE_LENGTH
 

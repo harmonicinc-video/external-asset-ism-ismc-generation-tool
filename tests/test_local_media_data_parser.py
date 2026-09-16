@@ -81,3 +81,28 @@ class TestExtendedBoxSize:
 
         with pytest.raises(Exception, match="Invalid atom size"):
             LocalMediaDataParser.get_media_data(client, file_name)
+
+    def test_get_media_data_raises_for_truncated_extended_size(self, tmp_path):
+        # The file ends before the full 8-byte 'largesize' field is available;
+        # a short read must not be silently decoded as a valid (smaller) size.
+        ftyp = _box(b"ftyp", b"isom")
+        truncated_mdat = struct.pack(">I", 1) + b"mdat" + b"\x00\x00\x00"  # only 3 of 8 largesize bytes
+
+        file_name = "truncated_extended_size.mp4"
+        client = _make_client(tmp_path, file_name, ftyp + truncated_mdat)
+
+        with pytest.raises(Exception, match="Truncated extended size field"):
+            LocalMediaDataParser.get_media_data(client, file_name)
+
+    def test_find_and_process_moof_atoms_raises_for_truncated_extended_size(self, tmp_path):
+        # Same truncated 'largesize' scenario, but hit via the in-memory moof scan.
+        ftyp = _box(b"ftyp", b"isom")
+        moov = _box(b"moov", b"mvex" + b"\x00" * 8)
+        moof1 = _box(b"moof", b"F" * 16)
+        truncated_mdat = struct.pack(">I", 1) + b"mdat" + b"\x00\x00\x00"  # only 3 of 8 largesize bytes
+
+        file_name = "fragmented_truncated_extended_size.mp4"
+        client = _make_client(tmp_path, file_name, ftyp + moov + moof1 + truncated_mdat)
+
+        with pytest.raises(Exception, match="Truncated extended size field"):
+            LocalMediaDataParser.get_media_data(client, file_name)

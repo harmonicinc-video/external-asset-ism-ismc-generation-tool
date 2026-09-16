@@ -80,6 +80,11 @@ class LocalMediaDataParser:
                     )
                 except Exception as e:
                     raise Exception(f"Error reading extended size at offset {atom_start + header_length}: {str(e)}")
+                if len(largesize_data) != LocalMediaDataParser._LARGESIZE_LENGTH:
+                    raise ValueError(
+                        f"Truncated extended size field for atom '{atom_type}' at offset {atom_start + header_length}: "
+                        f"expected {LocalMediaDataParser._LARGESIZE_LENGTH} bytes, got {len(largesize_data)}"
+                    )
                 atom_size = int.from_bytes(largesize_data, byteorder='big')
                 atom_header_data += largesize_data
                 header_length += LocalMediaDataParser._LARGESIZE_LENGTH
@@ -126,6 +131,11 @@ class LocalMediaDataParser:
         if atom_size == 1:
             largesize_offset = offset + header_length
             largesize_data = data[largesize_offset:largesize_offset + LocalMediaDataParser._LARGESIZE_LENGTH]
+            if len(largesize_data) != LocalMediaDataParser._LARGESIZE_LENGTH:
+                raise ValueError(
+                    f"Truncated extended size field for atom '{atom_type}' at offset {largesize_offset}: "
+                    f"expected {LocalMediaDataParser._LARGESIZE_LENGTH} bytes, got {len(largesize_data)}"
+                )
             atom_size = int.from_bytes(largesize_data, byteorder='big')
             header_length += LocalMediaDataParser._LARGESIZE_LENGTH
 

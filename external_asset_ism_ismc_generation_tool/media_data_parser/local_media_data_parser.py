@@ -7,6 +7,7 @@ from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.sync_
 
 class LocalMediaDataParser:
     _MEDIA_HEADER_LENGTH = 8  # 8 bytes
+    _LARGESIZE_LENGTH = 8  # 8 bytes, ISO/IEC 14496-12 64-bit extended box size
     _MOOFS = 'moofs'
     __logger: ILogger = Logger("LocalMediaDataParser")
 
@@ -55,6 +56,7 @@ class LocalMediaDataParser:
         start_byte = offset
 
         while True:
+            atom_start = start_byte
             try:
                 atom_header_data = local_file_service_client.download_part_of_file(
                     file_name=file_name,
@@ -65,20 +67,40 @@ class LocalMediaDataParser:
                 raise Exception(f"Error reading data at offset {start_byte}: {str(e)}")
 
             atom_size, atom_type = LocalMediaDataParser.__parse_atom_header(atom_header_data)
-            start_byte += LocalMediaDataParser._MEDIA_HEADER_LENGTH
+            header_length = LocalMediaDataParser._MEDIA_HEADER_LENGTH
+
+            # ISO/IEC 14496-12 extended size: a 32-bit size of 1 means the real
+            # 64-bit box size is stored in the following 8-byte 'largesize' field.
+            if atom_size == 1:
+                try:
+                    largesize_data = local_file_service_client.download_part_of_file(
+                        file_name=file_name,
+                        offset=atom_start + header_length,
+                        length=LocalMediaDataParser._LARGESIZE_LENGTH
+                    )
+                except Exception as e:
+                    raise Exception(f"Error reading extended size at offset {atom_start + header_length}: {str(e)}")
+                atom_size = int.from_bytes(largesize_data, byteorder='big')
+                atom_header_data += largesize_data
+                header_length += LocalMediaDataParser._LARGESIZE_LENGTH
+
+            if atom_size < header_length:
+                raise ValueError(f"Invalid atom size {atom_size} for atom '{atom_type}' at offset {atom_start}")
+
+            start_byte = atom_start + header_length
 
             try:
                 if atom_type == atom_type_to_find:
                     atom_data = atom_header_data + local_file_service_client.download_part_of_file(
                         file_name=file_name,
                         offset=start_byte,
-                        length=atom_size - LocalMediaDataParser._MEDIA_HEADER_LENGTH
+                        length=atom_size - header_length
                     )
-                    return atom_size, atom_data, start_byte - LocalMediaDataParser._MEDIA_HEADER_LENGTH
+                    return atom_size, atom_data, atom_start
             except Exception as e:
                 raise Exception(f"Error reading data at offset {start_byte} for atom {atom_type_to_find}: {str(e)}")
 
-            start_byte += atom_size - LocalMediaDataParser._MEDIA_HEADER_LENGTH
+            start_byte = atom_start + atom_size
 
     @staticmethod
     def __parse_atom_header(data: bytes) -> Tuple[int, str]:
@@ -87,7 +109,10 @@ class LocalMediaDataParser:
             raise ValueError("Invalid atom header length")
 
         size = int.from_bytes(data[:4], byteorder='big')
-        atom_type = data[4:8].decode('utf-8')
+        try:
+            atom_type = data[4:8].decode('ascii')
+        except UnicodeDecodeError as e:
+            raise ValueError(f"Invalid atom type bytes {data[4:8].hex()} in atom header") from e
 
         return size, atom_type
 
@@ -95,6 +120,18 @@ class LocalMediaDataParser:
     def __get_atom_header(data: bytes, offset: int) -> Tuple[int, str]:
         atom_header_data = data[offset:offset + LocalMediaDataParser._MEDIA_HEADER_LENGTH]
         atom_size, atom_type = LocalMediaDataParser.__parse_atom_header(atom_header_data)
+        header_length = LocalMediaDataParser._MEDIA_HEADER_LENGTH
+
+        # ISO/IEC 14496-12 extended size: resolve the 64-bit 'largesize' field, if present.
+        if atom_size == 1:
+            largesize_offset = offset + header_length
+            largesize_data = data[largesize_offset:largesize_offset + LocalMediaDataParser._LARGESIZE_LENGTH]
+            atom_size = int.from_bytes(largesize_data, byteorder='big')
+            header_length += LocalMediaDataParser._LARGESIZE_LENGTH
+
+        if atom_size < header_length:
+            raise ValueError(f"Invalid atom size {atom_size} for atom '{atom_type}' at offset {offset}")
+
         return atom_size, atom_type
 
     @staticmethod

@@ -106,3 +106,75 @@ class TestExtendedBoxSize:
 
         with pytest.raises(Exception, match="Truncated extended size field"):
             LocalMediaDataParser.get_media_data(client, file_name)
+
+    def test_get_media_data_normalizes_extended_size_moov_header(self, tmp_path):
+        # 'moov' itself (not just 'mdat') may use the extended size header;
+        # downstream pymp4-based parsing only understands a standard 32-bit
+        # size, so the returned bytes must always use the standard header.
+        ftyp = _box(b"ftyp", b"isom")
+        payload = b"\x00" * 32
+        moov = _extended_box(b"moov", payload)
+
+        file_name = "extended_moov.mp4"
+        client = _make_client(tmp_path, file_name, ftyp + moov)
+
+        media_data = LocalMediaDataParser.get_media_data(client, file_name)
+
+        assert media_data[AtomType.MOOV_ATOM_TYPE.value] == _box(b"moov", payload)
+
+    def test_find_and_process_moof_atoms_normalizes_extended_size_moof_header(self, tmp_path):
+        # Same normalization requirement for an individual 'moof' fragment.
+        ftyp = _box(b"ftyp", b"isom")
+        moov = _box(b"moov", b"mvex" + b"\x00" * 8)
+        moof1_payload = b"F" * 16
+        moof1 = _extended_box(b"moof", moof1_payload)
+        mfra = _box(b"mfra")
+
+        file_name = "fragmented_extended_moof.mp4"
+        client = _make_client(tmp_path, file_name, ftyp + moov + moof1 + mfra)
+
+        media_data = LocalMediaDataParser.get_media_data(client, file_name)
+
+        assert media_data["moofs"] == [_box(b"moof", moof1_payload)]
+
+    def test_get_media_data_raises_for_truncated_atom_body(self, tmp_path):
+        # 'moov' declares a size larger than the bytes actually available on
+        # disk; a short read at EOF must not be silently accepted as a
+        # smaller, valid box.
+        ftyp = _box(b"ftyp", b"isom")
+        oversized_moov_header = struct.pack(">I", 8 + 32) + b"moov"  # declares 32-byte payload
+        actual_payload = b"\x00" * 10  # far fewer bytes actually present
+
+        file_name = "truncated_moov_body.mp4"
+        client = _make_client(tmp_path, file_name, ftyp + oversized_moov_header + actual_payload)
+
+        with pytest.raises(Exception, match="Truncated atom"):
+            LocalMediaDataParser.get_media_data(client, file_name)
+
+    def test_find_and_process_moof_atoms_raises_for_atom_size_exceeding_buffer(self, tmp_path):
+        # A box within the in-memory moof/fragment scan declares a size that
+        # overruns the available buffer; slicing must not silently truncate
+        # it into a corrupt-but-accepted box.
+        ftyp = _box(b"ftyp", b"isom")
+        moov = _box(b"moov", b"mvex" + b"\x00" * 8)
+        moof1 = _box(b"moof", b"F" * 16)
+        corrupt_header = struct.pack(">I", 1000) + b"free"  # declares far more than remains
+        trailing_bytes = b"\x00" * 8
+
+        file_name = "moof_declares_oversized_atom.mp4"
+        client = _make_client(tmp_path, file_name, ftyp + moov + moof1 + corrupt_header + trailing_bytes)
+
+        with pytest.raises(Exception, match="exceeds the available data"):
+            LocalMediaDataParser.get_media_data(client, file_name)
+
+    def test_build_standard_box_raises_for_body_exceeding_32bit_size(self):
+        # A box whose body alone would push the normalized size past the
+        # 32-bit header limit must be rejected explicitly instead of wrapping
+        # around or producing a corrupt header. A fake body avoids allocating
+        # multiple gigabytes just to exercise this boundary check.
+        class _FakeHugeBody:
+            def __len__(self):
+                return 0xFFFFFFFF
+
+        with pytest.raises(ValueError, match="is too large"):
+            LocalMediaDataParser._LocalMediaDataParser__build_standard_box("moov", _FakeHugeBody())

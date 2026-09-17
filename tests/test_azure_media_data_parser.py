@@ -106,3 +106,71 @@ class TestExtendedBoxSize:
 
         with pytest.raises(Exception, match="Truncated extended size field"):
             AzureMediaDataParser.get_media_data(client, "fragmented_truncated_extended_size.mp4")
+
+    def test_get_media_data_normalizes_extended_size_moov_header(self):
+        # 'moov' itself (not just 'mdat') may use the extended size header;
+        # downstream pymp4-based parsing only understands a standard 32-bit
+        # size, so the returned bytes must always use the standard header.
+        ftyp = _box(b"ftyp", b"isom")
+        payload = b"\x00" * 32
+        moov = _extended_box(b"moov", payload)
+
+        client = FakeAzureBlobServiceClient(ftyp + moov)
+
+        media_data = AzureMediaDataParser.get_media_data(client, "extended_moov.mp4")
+
+        assert media_data[AtomType.MOOV_ATOM_TYPE.value] == _box(b"moov", payload)
+
+    def test_find_and_process_moof_atoms_normalizes_extended_size_moof_header(self):
+        # Same normalization requirement for an individual 'moof' fragment.
+        ftyp = _box(b"ftyp", b"isom")
+        moov = _box(b"moov", b"mvex" + b"\x00" * 8)
+        moof1_payload = b"F" * 16
+        moof1 = _extended_box(b"moof", moof1_payload)
+        mfra = _box(b"mfra")
+
+        client = FakeAzureBlobServiceClient(ftyp + moov + moof1 + mfra)
+
+        media_data = AzureMediaDataParser.get_media_data(client, "fragmented_extended_moof.mp4")
+
+        assert media_data["moofs"] == [_box(b"moof", moof1_payload)]
+
+    def test_get_media_data_raises_for_truncated_atom_body(self):
+        # 'moov' declares a size larger than the bytes actually available in
+        # the blob; a short read at EOF must not be silently accepted as a
+        # smaller, valid box.
+        ftyp = _box(b"ftyp", b"isom")
+        oversized_moov_header = struct.pack(">I", 8 + 32) + b"moov"  # declares 32-byte payload
+        actual_payload = b"\x00" * 10  # far fewer bytes actually present
+
+        client = FakeAzureBlobServiceClient(ftyp + oversized_moov_header + actual_payload)
+
+        with pytest.raises(Exception, match="Truncated atom"):
+            AzureMediaDataParser.get_media_data(client, "truncated_moov_body.mp4")
+
+    def test_find_and_process_moof_atoms_raises_for_atom_size_exceeding_buffer(self):
+        # A box within the in-memory moof/fragment scan declares a size that
+        # overruns the available buffer; slicing must not silently truncate
+        # it into a corrupt-but-accepted box.
+        ftyp = _box(b"ftyp", b"isom")
+        moov = _box(b"moov", b"mvex" + b"\x00" * 8)
+        moof1 = _box(b"moof", b"F" * 16)
+        corrupt_header = struct.pack(">I", 1000) + b"free"  # declares far more than remains
+        trailing_bytes = b"\x00" * 8
+
+        client = FakeAzureBlobServiceClient(ftyp + moov + moof1 + corrupt_header + trailing_bytes)
+
+        with pytest.raises(Exception, match="exceeds the available data"):
+            AzureMediaDataParser.get_media_data(client, "moof_declares_oversized_atom.mp4")
+
+    def test_build_standard_box_raises_for_body_exceeding_32bit_size(self):
+        # A box whose body alone would push the normalized size past the
+        # 32-bit header limit must be rejected explicitly instead of wrapping
+        # around or producing a corrupt header. A fake body avoids allocating
+        # multiple gigabytes just to exercise this boundary check.
+        class _FakeHugeBody:
+            def __len__(self):
+                return 0xFFFFFFFF
+
+        with pytest.raises(ValueError, match="is too large"):
+            AzureMediaDataParser._AzureMediaDataParser__build_standard_box("moov", _FakeHugeBody())

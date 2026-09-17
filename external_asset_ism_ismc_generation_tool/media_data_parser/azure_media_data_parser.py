@@ -108,7 +108,6 @@ class AzureMediaDataParser:
                         f"expected {AzureMediaDataParser._LARGESIZE_LENGTH} bytes, got {len(largesize_data)}"
                     )
                 atom_size = int.from_bytes(largesize_data, byteorder='big')
-                atom_header_data += largesize_data
                 header_length += AzureMediaDataParser._LARGESIZE_LENGTH
 
             if atom_size < header_length:
@@ -116,16 +115,27 @@ class AzureMediaDataParser:
 
             start_byte = atom_start + header_length
 
-            try:
-                if atom_type == atom_type_to_find:
-                    atom_data = atom_header_data + az_blob_service_client.download_part_of_blob(
+            if atom_type == atom_type_to_find:
+                body_length = atom_size - header_length
+                try:
+                    body = az_blob_service_client.download_part_of_blob(
                         blob_name=blob_name,
                         offset=start_byte,
-                        length=atom_size - header_length
+                        length=body_length
                     )
-                    return atom_size, atom_data, atom_start
-            except Exception as e:
-                raise Exception(f"Error downloading data at offset {start_byte} for atom {atom_type_to_find}: {str(e)}")
+                except Exception as e:
+                    raise Exception(f"Error downloading data at offset {start_byte} for atom {atom_type_to_find}: {str(e)}")
+                # A short read (e.g. declared size overruns EOF) must not be
+                # silently accepted as a valid, smaller box.
+                if len(body) != body_length:
+                    raise ValueError(
+                        f"Truncated atom '{atom_type}' at offset {atom_start}: expected {body_length} body bytes, got {len(body)}"
+                    )
+                # Downstream MP4 box parsing (pymp4) only understands the standard
+                # 32-bit size header, so always return boxes in that form even if
+                # they were encoded on disk with the 64-bit 'largesize' field.
+                atom_data = AzureMediaDataParser.__build_standard_box(atom_type, body)
+                return atom_size, atom_data, atom_start
 
             start_byte = atom_start + atom_size
 
@@ -144,7 +154,17 @@ class AzureMediaDataParser:
         return size, atom_type
 
     @staticmethod
-    def __get_atom_header(data: bytes, offset: int) -> Tuple[int, str]:
+    def __build_standard_box(atom_type: str, body: bytes) -> bytes:
+        """Rebuilds a box with a standard 32-bit size header, regardless of the
+        original on-disk encoding, since downstream MP4 box parsing (pymp4) does
+        not support the 64-bit 'largesize' field."""
+        total_size = AzureMediaDataParser._MEDIA_HEADER_LENGTH + len(body)
+        if total_size > 0xFFFFFFFF:
+            raise ValueError(f"Box '{atom_type}' is too large ({total_size} bytes) to normalize to a standard 32-bit header")
+        return total_size.to_bytes(4, byteorder='big') + atom_type.encode('ascii') + body
+
+    @staticmethod
+    def __get_atom_header(data: bytes, offset: int) -> Tuple[int, str, int]:
         atom_header_data = data[offset:offset + AzureMediaDataParser._MEDIA_HEADER_LENGTH]
         atom_size, atom_type = AzureMediaDataParser.__parse_atom_header(atom_header_data)
         header_length = AzureMediaDataParser._MEDIA_HEADER_LENGTH
@@ -164,20 +184,31 @@ class AzureMediaDataParser:
         if atom_size < header_length:
             raise ValueError(f"Invalid atom size {atom_size} for atom '{atom_type}' at offset {offset}")
 
-        return atom_size, atom_type
+        # A declared size that overruns the available buffer would otherwise be
+        # silently truncated by slicing, returning corrupt box data with no error.
+        if offset + atom_size > len(data):
+            raise ValueError(
+                f"Atom '{atom_type}' at offset {offset} declares size {atom_size}, "
+                f"which exceeds the available data ({len(data) - offset} bytes remaining)"
+            )
+
+        return atom_size, atom_type, header_length
 
     @staticmethod
     def __find_and_process_moof_atoms(data: bytes, media_data: Dict[str, any]) -> Dict[str, any]:
         start_byte = 0
         while start_byte < len(data):
-            atom_size, atom_type = AzureMediaDataParser.__get_atom_header(data, start_byte)
+            atom_size, atom_type, header_length = AzureMediaDataParser.__get_atom_header(data, start_byte)
+            end_byte = start_byte + atom_size
 
             if atom_type == AtomType.MOOF_ATOM_TYPE.value:
-                end_byte = start_byte + atom_size
-                media_data.setdefault(AzureMediaDataParser._MOOFS, []).append(data[start_byte:end_byte])
-                start_byte += len(data[start_byte:end_byte])
+                body = data[start_byte + header_length:end_byte]
+                media_data.setdefault(AzureMediaDataParser._MOOFS, []).append(
+                    AzureMediaDataParser.__build_standard_box(atom_type, body)
+                )
+                start_byte = end_byte
             elif atom_type == AtomType.MFRA_ATOM_TYPE.value:
                 break
             else:
-                start_byte += atom_size
+                start_byte = end_byte
         return media_data

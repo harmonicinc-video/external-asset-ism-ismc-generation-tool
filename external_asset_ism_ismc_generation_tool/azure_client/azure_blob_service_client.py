@@ -36,6 +36,13 @@ class AzureBlobServiceClient:
                                                         blob_name=blob_name)
         return blob_client.download_blob(offset=offset, length=length).readall()
 
+    def get_blob_size(self, blob_name: str) -> int:
+        """Returns the blob's total size via a metadata-only call, without downloading its content."""
+        blob_client = BlobClient.from_connection_string(conn_str=self.connection_string,
+                                                        container_name=self.container_name,
+                                                        blob_name=blob_name)
+        return blob_client.get_blob_properties().size
+
     def upload_blob_to_container(self, blob_name: str, content: str, overwrite: bool = False):
         stream = io.BytesIO(content.encode())
         blob_client = self.container_client.get_blob_client(blob_name)

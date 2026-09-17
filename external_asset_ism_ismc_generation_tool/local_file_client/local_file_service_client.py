@@ -62,6 +62,16 @@ class LocalFileServiceClient:
             else:
                 return f.read()
 
+    def get_file_size(self, file_name: str) -> int:
+        """Returns the file's total size via a stat call, without reading its content."""
+        file_path = os.path.join(self.local_directory, file_name)
+
+        if not os.path.exists(file_path):
+            self.__logger.error(f'File does not exist: {file_path}')
+            raise FileNotFoundError(f"File does not exist: {file_path}")
+
+        return os.path.getsize(file_path)
+
     def write_file(self, file_name: str, content: str):
         """Write content to a local file"""
         file_path = os.path.join(self.local_directory, file_name)

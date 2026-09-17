@@ -24,12 +24,11 @@ class LocalMediaDataParser:
             media_data[AtomType.MOOV_ATOM_TYPE.value] = moov_data
             if AtomType.MVEX_ATOM_TYPE.value.encode() in moov_data:
                 start_byte += moov_size
-                moof_size, moof_data, start_byte = LocalMediaDataParser.__find_atom(local_file_service_client, file_name, AtomType.MOOF_ATOM_TYPE.value, start_byte)
-                try:
-                    remaining_data = moof_data + local_file_service_client.download_part_of_file(file_name=file_name, offset=start_byte + moof_size)
-                except Exception as e:
-                    raise Exception(f"Error reading data for moof box {start_byte + moof_size}: {str(e)}")
-                LocalMediaDataParser.__find_and_process_moof_atoms(remaining_data, media_data)
+                # Fragments can carry gigabytes of 'mdat' sample data between 'moof'
+                # boxes; scan incrementally (headers + moof bodies only) against the
+                # file's known size instead of buffering everything into memory.
+                file_size = local_file_service_client.get_file_size(file_name)
+                LocalMediaDataParser.__scan_fragment_boxes(local_file_service_client, file_name, media_data, start_byte, file_size)
             else:
                 media_data[LocalMediaDataParser._MOOFS] = []
 
@@ -142,52 +141,76 @@ class LocalMediaDataParser:
         return total_size.to_bytes(4, byteorder='big') + atom_type.encode('ascii') + body
 
     @staticmethod
-    def __get_atom_header(data: bytes, offset: int) -> Tuple[int, str, int]:
-        atom_header_data = data[offset:offset + LocalMediaDataParser._MEDIA_HEADER_LENGTH]
-        atom_size, atom_type = LocalMediaDataParser.__parse_atom_header(atom_header_data)
-        header_length = LocalMediaDataParser._MEDIA_HEADER_LENGTH
+    def __scan_fragment_boxes(local_file_service_client: LocalFileServiceClient, file_name: str, media_data: Dict[str, any], offset: int, file_size: int) -> None:
+        """Incrementally scans 'moof' fragments starting at `offset`, reading only
+        box headers and 'moof' bodies. 'mdat' and other boxes are skipped via offset
+        arithmetic without reading their (potentially multi-gigabyte) payload."""
+        start_byte = offset
+        media_data.setdefault(LocalMediaDataParser._MOOFS, [])
 
-        # ISO/IEC 14496-12 extended size: resolve the 64-bit 'largesize' field, if present.
-        if atom_size == 1:
-            largesize_offset = offset + header_length
-            largesize_data = data[largesize_offset:largesize_offset + LocalMediaDataParser._LARGESIZE_LENGTH]
-            if len(largesize_data) != LocalMediaDataParser._LARGESIZE_LENGTH:
-                raise ValueError(
-                    f"Truncated extended size field for atom '{atom_type}' at offset {largesize_offset}: "
-                    f"expected {LocalMediaDataParser._LARGESIZE_LENGTH} bytes, got {len(largesize_data)}"
+        while start_byte < file_size:
+            atom_start = start_byte
+            try:
+                atom_header_data = local_file_service_client.download_part_of_file(
+                    file_name=file_name,
+                    offset=start_byte,
+                    length=LocalMediaDataParser._MEDIA_HEADER_LENGTH
                 )
-            atom_size = int.from_bytes(largesize_data, byteorder='big')
-            header_length += LocalMediaDataParser._LARGESIZE_LENGTH
+            except Exception as e:
+                raise Exception(f"Error reading data at offset {start_byte}: {str(e)}")
 
-        if atom_size < header_length:
-            raise ValueError(f"Invalid atom size {atom_size} for atom '{atom_type}' at offset {offset}")
+            atom_size, atom_type = LocalMediaDataParser.__parse_atom_header(atom_header_data)
+            header_length = LocalMediaDataParser._MEDIA_HEADER_LENGTH
 
-        # A declared size that overruns the available buffer would otherwise be
-        # silently truncated by slicing, returning corrupt box data with no error.
-        if offset + atom_size > len(data):
-            raise ValueError(
-                f"Atom '{atom_type}' at offset {offset} declares size {atom_size}, "
-                f"which exceeds the available data ({len(data) - offset} bytes remaining)"
-            )
+            # ISO/IEC 14496-12 extended size: a 32-bit size of 1 means the real
+            # 64-bit box size is stored in the following 8-byte 'largesize' field.
+            if atom_size == 1:
+                try:
+                    largesize_data = local_file_service_client.download_part_of_file(
+                        file_name=file_name,
+                        offset=atom_start + header_length,
+                        length=LocalMediaDataParser._LARGESIZE_LENGTH
+                    )
+                except Exception as e:
+                    raise Exception(f"Error reading extended size at offset {atom_start + header_length}: {str(e)}")
+                if len(largesize_data) != LocalMediaDataParser._LARGESIZE_LENGTH:
+                    raise ValueError(
+                        f"Truncated extended size field for atom '{atom_type}' at offset {atom_start + header_length}: "
+                        f"expected {LocalMediaDataParser._LARGESIZE_LENGTH} bytes, got {len(largesize_data)}"
+                    )
+                atom_size = int.from_bytes(largesize_data, byteorder='big')
+                header_length += LocalMediaDataParser._LARGESIZE_LENGTH
 
-        return atom_size, atom_type, header_length
+            if atom_size < header_length:
+                raise ValueError(f"Invalid atom size {atom_size} for atom '{atom_type}' at offset {atom_start}")
 
-    @staticmethod
-    def __find_and_process_moof_atoms(data: bytes, media_data: Dict[str, any]) -> Dict[str, any]:
-        start_byte = 0
-        while start_byte < len(data):
-            atom_size, atom_type, header_length = LocalMediaDataParser.__get_atom_header(data, start_byte)
-            end_byte = start_byte + atom_size
+            # A declared size that overruns the file would otherwise be silently
+            # accepted (or under-read), returning corrupt/partial box data with no error.
+            if atom_start + atom_size > file_size:
+                raise ValueError(
+                    f"Atom '{atom_type}' at offset {atom_start} declares size {atom_size}, "
+                    f"which exceeds the available data ({file_size - atom_start} bytes remaining)"
+                )
+
+            start_byte = atom_start + header_length
 
             if atom_type == AtomType.MOOF_ATOM_TYPE.value:
-                body = data[start_byte + header_length:end_byte]
-                media_data.setdefault(LocalMediaDataParser._MOOFS, []).append(
-                    LocalMediaDataParser.__build_standard_box(atom_type, body)
-                )
-                start_byte = end_byte
+                body_length = atom_size - header_length
+                try:
+                    body = local_file_service_client.download_part_of_file(
+                        file_name=file_name,
+                        offset=start_byte,
+                        length=body_length
+                    )
+                except Exception as e:
+                    raise Exception(f"Error reading data at offset {start_byte} for atom moof: {str(e)}")
+                if len(body) != body_length:
+                    raise ValueError(
+                        f"Truncated atom 'moof' at offset {atom_start}: expected {body_length} body bytes, got {len(body)}"
+                    )
+                media_data[LocalMediaDataParser._MOOFS].append(LocalMediaDataParser.__build_standard_box(atom_type, body))
+                start_byte = atom_start + atom_size
             elif atom_type == AtomType.MFRA_ATOM_TYPE.value:
                 break
             else:
-                start_byte = end_byte
-        return media_data
-        return media_data
+                start_byte = atom_start + atom_size

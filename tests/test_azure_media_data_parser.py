@@ -36,6 +36,9 @@ class FakeAzureBlobServiceClient:
         start = offset or 0
         return self._content[start:start + length] if length is not None else self._content[start:]
 
+    def get_blob_size(self, blob_name):
+        return len(self._content)
+
 
 class TestExtendedBoxSize:
     """Verifies that boxes using the 64-bit extended size are parsed correctly."""
@@ -174,3 +177,56 @@ class TestExtendedBoxSize:
 
         with pytest.raises(ValueError, match="is too large"):
             AzureMediaDataParser._AzureMediaDataParser__build_standard_box("moov", _FakeHugeBody())
+
+    def test_scan_fragment_boxes_skips_huge_mdat_without_downloading_its_body(self):
+        # A multi-gigabyte 'mdat' between two 'moof' boxes must be skipped via
+        # offset arithmetic alone; it must never be downloaded into memory.
+        # A sparse fake blob (only headers/moof bodies materialized) combined
+        # with a hard cap on any single read length proves this holds even
+        # for a blob far too large to ever buffer in memory.
+        class _SparseBlobClient:
+            def __init__(self, chunks, size, max_allowed_length):
+                self._chunks = chunks
+                self._size = size
+                self._max_allowed_length = max_allowed_length
+
+            def get_blob_size(self, blob_name):
+                return self._size
+
+            def download_part_of_blob(self, blob_name, offset=None, length=None):
+                offset = offset or 0
+                if length is not None and length > self._max_allowed_length:
+                    raise AssertionError(
+                        f"Unexpectedly requested {length} bytes at offset {offset}; "
+                        f"large 'mdat' bodies must never be downloaded"
+                    )
+                for chunk_offset, chunk in self._chunks.items():
+                    if chunk_offset <= offset < chunk_offset + len(chunk):
+                        rel = offset - chunk_offset
+                        return chunk[rel:rel + length] if length is not None else chunk[rel:]
+                raise AssertionError(f"Unexpected read at offset {offset} (no chunk registered there)")
+
+        ftyp = _box(b"ftyp", b"isom")
+        moov = _box(b"moov", b"mvex" + b"\x00" * 8)
+        moof1 = _box(b"moof", b"F" * 16)
+        offset_after_moof1 = len(ftyp) + len(moov) + len(moof1)
+
+        huge_payload_len = 5 * 1024 ** 3  # 5 GiB, declared only -- never materialized
+        mdat_total_size = 16 + huge_payload_len  # extended header + payload
+        huge_mdat_header = struct.pack(">I", 1) + b"mdat" + struct.pack(">Q", mdat_total_size)
+        offset_after_mdat = offset_after_moof1 + mdat_total_size
+
+        moof2 = _box(b"moof", b"G" * 16)
+        mfra = _box(b"mfra")
+
+        chunks = {
+            0: ftyp + moov + moof1 + huge_mdat_header,
+            offset_after_mdat: moof2 + mfra,
+        }
+        total_size = offset_after_mdat + len(moof2) + len(mfra)
+
+        client = _SparseBlobClient(chunks, total_size, max_allowed_length=64)
+
+        media_data = AzureMediaDataParser.get_media_data(client, "huge_fragmented.mp4")
+
+        assert media_data["moofs"] == [moof1, moof2]

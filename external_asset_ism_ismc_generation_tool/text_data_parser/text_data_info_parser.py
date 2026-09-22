@@ -65,7 +65,7 @@ class TextDataInfoParser:
                 raise ValueError(f"TTML parsing error: {error}") from error
 
         logger.error("No valid WebVTT or TTML indication found in the file.")
-        raise ValueError(f"No valid WebVTT or TTML indication found: {sub_file}")
+        raise ValueError("No valid WebVTT or TTML indication found")
 
     @staticmethod
     def _get_start_and_duration(text_file: Union[webvtt.WebVTT, ttconv.model.ContentDocument]) -> Tuple[float, float]:

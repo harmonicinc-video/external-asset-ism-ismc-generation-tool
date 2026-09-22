@@ -108,6 +108,7 @@ class TestGenerateManifestsLocal:
         mock_blob_data.media_datas = []
         mock_blob_data.media_index_datas = []
         mock_blob_data.text_data_info_list = []
+        mock_blob_data.all_file_names = []
         mock_local_handler.get_data_from_local_files.return_value = mock_blob_data
         
         # Mock MediaData
@@ -156,7 +157,6 @@ class TestGenerateManifestsAzure:
         # Mock AzureBlobServiceClient
         mock_client_instance = Mock()
         mock_client_instance.container_client.container_name = 'test-container'
-        mock_client_instance.blob_exists.return_value = False
         mock_client_instance.upload_blob_to_container = Mock()
         mock_azure_client.return_value = mock_client_instance
         
@@ -166,6 +166,7 @@ class TestGenerateManifestsAzure:
         mock_blob_data.media_datas = []
         mock_blob_data.media_index_datas = []
         mock_blob_data.text_data_info_list = []
+        mock_blob_data.all_file_names = []
         mock_blob_handler.get_data_from_blobs.return_value = mock_blob_data
         
         # Mock MediaData
@@ -210,17 +211,16 @@ class TestGenerateManifestsAzure:
         # Mock AzureBlobServiceClient - base files exist, _new files don't
         mock_client_instance = Mock()
         mock_client_instance.container_client.container_name = 'test-container'
-        # Return True for base names (triggering _new suffix), False for _new names (available)
-        mock_client_instance.blob_exists.side_effect = lambda name: name in ('test_manifest.ism', 'test_manifest.ismc')
         mock_client_instance.upload_blob_to_container = Mock()
         mock_azure_client.return_value = mock_client_instance
         
-        # Mock BlobMediaData
+        # Mock BlobMediaData - base manifest pair already present, triggering _new suffix
         mock_blob_data = Mock()
         mock_blob_data.manifest_name = 'test_manifest'
         mock_blob_data.media_datas = []
         mock_blob_data.media_index_datas = []
         mock_blob_data.text_data_info_list = []
+        mock_blob_data.all_file_names = ['test_manifest.ism', 'test_manifest.ismc']
         mock_blob_handler.get_data_from_blobs.return_value = mock_blob_data
         
         # Mock MediaData
@@ -272,7 +272,6 @@ class TestGenerateManifestsAzure:
         }
         mock_client_instance = Mock()
         mock_client_instance.container_client.container_name = 'test-container'
-        mock_client_instance.blob_exists.side_effect = lambda name: name in existing_blobs
         mock_client_instance.upload_blob_to_container = Mock()
         mock_azure_client.return_value = mock_client_instance
 
@@ -281,6 +280,7 @@ class TestGenerateManifestsAzure:
         mock_blob_data.media_datas = []
         mock_blob_data.media_index_datas = []
         mock_blob_data.text_data_info_list = []
+        mock_blob_data.all_file_names = list(existing_blobs)
         mock_blob_handler.get_data_from_blobs.return_value = mock_blob_data
 
         mock_media = Mock()
@@ -326,7 +326,6 @@ class TestGenerateManifestsAzure:
         }
         mock_client_instance = Mock()
         mock_client_instance.container_client.container_name = 'test-container'
-        mock_client_instance.blob_exists.side_effect = lambda name: name in existing_blobs
         mock_client_instance.upload_blob_to_container = Mock()
         mock_azure_client.return_value = mock_client_instance
 
@@ -335,6 +334,7 @@ class TestGenerateManifestsAzure:
         mock_blob_data.media_datas = []
         mock_blob_data.media_index_datas = []
         mock_blob_data.text_data_info_list = []
+        mock_blob_data.all_file_names = list(existing_blobs)
         mock_blob_handler.get_data_from_blobs.return_value = mock_blob_data
 
         mock_media = Mock()

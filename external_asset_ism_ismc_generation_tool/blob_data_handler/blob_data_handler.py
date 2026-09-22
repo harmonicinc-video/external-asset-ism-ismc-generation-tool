@@ -54,7 +54,8 @@ class BlobDataHandler:
         
         # Convert iterator to list to allow multiple iterations
         blobs_list = list(blobs)
-        manifest_name = Common.get_manifest_name([blob.name for blob in blobs_list])
+        all_blob_names = [blob.name for blob in blobs_list]
+        manifest_name = Common.get_manifest_name(all_blob_names)
 
         task_mapping = BlobDataHandler.__map_blob_tasks(blobs_list, az_blob_service_client, executor, convert_webvtt)
 
@@ -77,7 +78,7 @@ class BlobDataHandler:
             except Exception as e:
                 BlobDataHandler.__logger.error(f"Error processing blob {blob_name}: {e}")
 
-        return BlobMediaData(manifest_name, media_datas, media_index_datas, text_datas_info, text_data_failures)
+        return BlobMediaData(manifest_name, media_datas, media_index_datas, text_datas_info, text_data_failures, all_blob_names)
 
     @staticmethod
     def __process_blob(blob, az_blob_service_client: AzureBlobServiceClient, convert_webvtt: bool = True) -> Tuple[Optional[str], Optional[Union[Dict[str, Dict], TextDataInfo]]]:

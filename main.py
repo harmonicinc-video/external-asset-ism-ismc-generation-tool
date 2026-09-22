@@ -107,36 +107,47 @@ def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
     return ism_xml_string, ismc_xml_string
 
 
-def _find_available_manifest_names(base_name: str, blob_exists_fn,
+def _find_available_manifest_names(base_name: str, all_file_names: list,
                                    overwrite_manifest: bool = False) -> tuple:
     """
-    Find a pair of ISM/ISMC filenames that don't conflict with existing blobs.
-    Both names share the same suffix to keep them consistent.
-    
+    Find a pair of ISM/ISMC filenames to write, given the current directory/container listing.
+    Matching against existing names is case-insensitive, since a manifest may already exist
+    with a different case than the canonical lowercase extension.
+
     Args:
         base_name: The asset base name (without extension)
-        blob_exists_fn: Callable that checks if a blob name already exists
-        overwrite_manifest: When True, always return the canonical (unsuffixed) pair.
-            When False, pick the first pair (canonical, then _new, _new2, ...) for
-            which neither name already exists.
+        all_file_names: Full listing of file/blob names currently present
+        overwrite_manifest: When True, reuse the exact existing `.ism`/`.ismc` names if present
+            (so the write actually replaces them), falling back to the canonical lowercase pair
+            for whichever one doesn't already exist. When False, preserve any existing pair and
+            pick the first free suffixed pair (canonical, then _new, _new2, ...).
         
     Returns:
         Tuple of (server_manifest_name, client_manifest_name)
     """
     logger: Logger = Logger("main")
-    server_manifest_name = f'{base_name}.ism'
-    client_manifest_name = f'{base_name}.ismc'
+    existing_ism, existing_ismc = Common.find_existing_manifest_names(all_file_names, base_name)
 
-    # When overwrite is disabled, choose a free pair that keeps both manifest suffixes aligned.
-    if not overwrite_manifest and (blob_exists_fn(server_manifest_name) or blob_exists_fn(client_manifest_name)):
-        suffix = '_new'
-        suffix_counter = 2
-        while blob_exists_fn(f'{base_name}{suffix}.ism') or blob_exists_fn(f'{base_name}{suffix}.ismc'):
-            suffix = f'_new{suffix_counter}'
-            suffix_counter += 1
-        server_manifest_name = f'{base_name}{suffix}.ism'
-        client_manifest_name = f'{base_name}{suffix}.ismc'
-        logger.info(f"Existing manifest found, generating new manifests as {server_manifest_name} / {client_manifest_name}")
+    if overwrite_manifest:
+        return existing_ism or f'{base_name}.ism', existing_ismc or f'{base_name}.ismc'
+
+    if existing_ism is None and existing_ismc is None:
+        return f'{base_name}.ism', f'{base_name}.ismc'
+
+    # An existing manifest (in any case) was found; keep it and pick a free suffixed pair.
+    existing_lower = {name.casefold() for name in all_file_names}
+
+    def exists(name: str) -> bool:
+        return name.casefold() in existing_lower
+
+    suffix = '_new'
+    suffix_counter = 2
+    while exists(f'{base_name}{suffix}.ism') or exists(f'{base_name}{suffix}.ismc'):
+        suffix = f'_new{suffix_counter}'
+        suffix_counter += 1
+    server_manifest_name = f'{base_name}{suffix}.ism'
+    client_manifest_name = f'{base_name}{suffix}.ismc'
+    logger.info(f"Existing manifest found, generating new manifests as {server_manifest_name} / {client_manifest_name}")
 
     return server_manifest_name, client_manifest_name
 
@@ -167,7 +178,7 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
 
     # Determine matching ISM/ISMC names (with suffix if originals already exist)
     server_manifest_name, client_manifest_name = _find_available_manifest_names(
-        blob_media_data.manifest_name, az_blob_service_client.blob_exists,
+        blob_media_data.manifest_name, blob_media_data.all_file_names,
         settings['overwrite_manifest']
     )
 
@@ -225,7 +236,7 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
     )
 
     server_manifest_name, client_manifest_name = _find_available_manifest_names(
-        blob_media_data.manifest_name, local_file_service_client.file_exists,
+        blob_media_data.manifest_name, blob_media_data.all_file_names,
         settings['overwrite_manifest']
     )
 

@@ -87,6 +87,26 @@ class Common:
         raise ValueError("Cannot determine manifest name: no ISM or supported media file found")
 
     @staticmethod
+    def find_existing_manifest_names(file_names: List[str], base_name: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Return the exact, original-case existing filenames matching `{base_name}.ism` and
+        `{base_name}.ismc`, case-insensitively (filenames may have been uploaded/created with
+        different casing than the canonical lowercase extension). None is returned for either
+        name that is not present.
+        """
+        target_ism = f'{base_name}.ism'.casefold()
+        target_ismc = f'{base_name}.ismc'.casefold()
+        ism_name = None
+        ismc_name = None
+        for file_name in sorted(file_names, key=str.casefold):
+            folded = file_name.casefold()
+            if ism_name is None and folded == target_ism:
+                ism_name = file_name
+            elif ismc_name is None and folded == target_ismc:
+                ismc_name = file_name
+        return ism_name, ismc_name
+
+    @staticmethod
     def get_last_track_id(mp4_track_info: list) -> int:
         return max(track.track_id for track in mp4_track_info) if mp4_track_info else 1
 

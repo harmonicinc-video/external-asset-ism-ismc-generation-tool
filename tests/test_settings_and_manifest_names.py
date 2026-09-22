@@ -52,23 +52,56 @@ def test_resolve_settings_applies_mode_specific_overwrite_default(settings, expe
 @pytest.mark.parametrize(
     ("existing_names", "expected_names"),
     [
-        (set(), ("asset.ism", "asset.ismc")),
-        ({"asset.ism", "asset.ismc"}, ("asset_new.ism", "asset_new.ismc")),
+        ([], ("asset.ism", "asset.ismc")),
+        (["asset.ism", "asset.ismc"], ("asset_new.ism", "asset_new.ismc")),
         (
-            {"asset.ism", "asset.ismc", "asset_new.ism"},
+            ["asset.ism", "asset.ismc", "asset_new.ism"],
             ("asset_new2.ism", "asset_new2.ismc"),
         ),
     ],
 )
 def test_manifest_names_preserve_existing_pair_when_overwrite_disabled(existing_names, expected_names):
-    assert _find_available_manifest_names("asset", existing_names.__contains__, False) == expected_names
+    assert _find_available_manifest_names("asset", existing_names, False) == expected_names
 
 
 def test_manifest_names_overwrite_canonical_pair_when_enabled():
-    existing_names = {"asset.ism", "asset.ismc"}
+    existing_names = ["asset.ism", "asset.ismc"]
 
-    assert _find_available_manifest_names("asset", existing_names.__contains__, True) == (
+    assert _find_available_manifest_names("asset", existing_names, True) == (
         "asset.ism",
+        "asset.ismc",
+    )
+
+
+def test_manifest_names_detect_mixed_case_existing_manifest_when_overwrite_disabled():
+    # Reported bug: an existing "asset.ISM" must not be invisible to a case-sensitive
+    # exact-name probe; it should be preserved and a suffixed pair generated instead.
+    existing_names = ["asset.ISM", "asset.ismc", "video.mp4"]
+
+    assert _find_available_manifest_names("asset", existing_names, False) == (
+        "asset_new.ism",
+        "asset_new.ismc",
+    )
+
+
+def test_manifest_names_overwrite_reuses_exact_case_of_existing_manifest():
+    # Writing with overwrite=True must target the manifest's actual on-disk/blob name,
+    # not a recomputed lowercase name that would leave the original file orphaned.
+    existing_names = ["asset.ISM", "asset.ismc", "video.mp4"]
+
+    assert _find_available_manifest_names("asset", existing_names, True) == (
+        "asset.ISM",
+        "asset.ismc",
+    )
+
+
+def test_manifest_names_overwrite_falls_back_to_canonical_for_missing_half_of_pair():
+    # Only the .ism half exists with unusual case; the .ismc half doesn't exist yet,
+    # so it should get the canonical lowercase name rather than an invented one.
+    existing_names = ["asset.ISM", "video.mp4"]
+
+    assert _find_available_manifest_names("asset", existing_names, True) == (
+        "asset.ISM",
         "asset.ismc",
     )
 

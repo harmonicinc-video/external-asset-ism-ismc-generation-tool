@@ -48,7 +48,8 @@ class LocalDataHandler:
     @staticmethod
     def __process_files(files, local_file_service_client: LocalFileServiceClient,
                         executor: ThreadPoolExecutor, settings: Optional[dict] = None) -> BlobMediaData:
-        manifest_name = Common.get_manifest_name([file.name for file in files])
+        all_file_names = [file.name for file in files]
+        manifest_name = Common.get_manifest_name(all_file_names)
         media_datas = None
         media_index_datas = None
         text_datas_info = []
@@ -77,7 +78,7 @@ class LocalDataHandler:
             except Exception as e:
                 LocalDataHandler.__logger.error(f"Error processing file {file_name}: {e}")
 
-        return BlobMediaData(manifest_name, media_datas, media_index_datas, text_datas_info, text_data_failures)
+        return BlobMediaData(manifest_name, media_datas, media_index_datas, text_datas_info, text_data_failures, all_file_names)
 
     @staticmethod
     def __process_file(file, local_file_service_client: LocalFileServiceClient,

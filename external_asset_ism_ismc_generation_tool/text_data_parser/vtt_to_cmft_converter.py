@@ -48,8 +48,10 @@ class VttToCmftConverter:
 
             for file_name in file_names:
                 VttToCmftConverter.__logger.info(f"Processing file: {file_name}")
-                key, format_ext = Common.get_key_and_format(file_name)
-                VttToCmftConverter.__logger.info(f"Extracted key: {key}, format: {format_ext}")
+                if "." in file_name:
+                    key, format_ext = Common.get_key_and_format(file_name)
+                else:
+                    key, format_ext = file_name, ""
                 format_lower = format_ext.lower()                
                 if format_lower == MediaFormat.VTT.value.lower():
                     vtt_files.append(file_name)

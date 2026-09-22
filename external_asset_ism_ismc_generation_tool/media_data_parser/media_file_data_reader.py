@@ -91,7 +91,7 @@ class MediaFileDataReader:
                 atom_size = int.from_bytes(largesize_data, byteorder="big")
                 header_length += MediaFileDataReader._LARGESIZE_LENGTH
 
-            if atom_size < header_length:
+            if atom_size <= 0 or atom_size < header_length:
                 raise ValueError(f"Invalid atom size {atom_size} for atom '{atom_type}' at offset {atom_start}")
 
             start_byte = atom_start + header_length

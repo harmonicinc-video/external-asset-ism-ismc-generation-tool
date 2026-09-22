@@ -81,6 +81,14 @@ class LocalFileServiceClient:
         
         self.__logger.info(f'Written file: {file_path}')
 
+    def write_bytes(self, file_name: str, content: bytes):
+        file_path = os.path.join(self.local_directory, file_name)
+
+        with open(file_path, 'wb') as file:
+            file.write(content)
+
+        self.__logger.info(f'Written file: {file_path}')
+
     def file_exists(self, file_name: str) -> bool:
         """Check if a file exists in the local directory"""
         file_path = os.path.join(self.local_directory, file_name)

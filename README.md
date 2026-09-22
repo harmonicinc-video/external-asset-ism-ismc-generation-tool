@@ -53,6 +53,7 @@ in case if the configuration file azure_config.json has been filled (the configu
 python3 main.py -local_directory=/path/to/directory/with/mp4/files
 ```
 This mode processes MP4 files from a local directory and generates ISM/ISMC manifests in the same directory. This option is completely independent of Azure and does not require any Azure configuration.
+WebVTT-to-CMFT conversion is supported in local mode as well as Azure mode.
 
 ### azure_config.json
 azure_config.json - configuration file may contain the following fields: connection_string, account_name, account_key, container_name:
@@ -84,14 +85,29 @@ python3 main.py -local_copy
 ```
 Run with local generation of ISM/ISMC (debug)
 
+```
+python3 main.py -overwrite_manifest
+python3 main.py -no_overwrite_manifest
+```
+Control whether canonical manifest names are replaced. The default is `true` in local mode and
+`false` in Azure mode. When overwrite is disabled, the tool preserves existing manifests and
+creates a matching `_new`, `_new2`, ... ISM/ISMC pair.
+
 ### Configuration file
 The application also supports the following configuration options in `azure_config.json`:
 
+### overwrite_manifest (boolean, mode-specific default)
+Controls whether canonical manifest names are replaced. When omitted, it defaults to `true` in
+local mode and `false` in Azure mode. Command-line overwrite flags take precedence over this value.
+
 ### Manifest Generation Behavior
 When manifests are generated:
-- If **no manifest exists**: A new manifest file (.ism/.ismc) is created with the standard name
-- If **a manifest already exists**: A new manifest is generated with the suffix `_new` appended to the filename (e.g., `asset_new.ism`, `asset_new.ismc`)
-- This ensures existing manifests are preserved while allowing new manifests to be generated
+- The manifest base name is chosen deterministically: an existing `.ism` name is preferred;
+  otherwise the first supported media filename in case-insensitive sort order is used.
+- Text, CMFT, and MPI index files are not used as the base name source.
+- If `overwrite_manifest=true`: canonical `.ism`/`.ismc` names are replaced.
+- If `overwrite_manifest=false`: existing manifests are preserved and a matching `_new`, `_new2`,
+  ... pair is generated.
 
 ### convert_webvtt (boolean, default: false)
 Controls how WebVTT files are handled:
@@ -185,9 +201,12 @@ Language codes are embedded at three levels to ensure proper signalization:
 - FourCC in manifest: "WVTT"
 
 **Mode 2: convert_webvtt = true**
-- VTT files are converted to CMFT during preprocessing
-- VTT files are excluded from manifest generation (handled by `blob_data_handler.py`)
+- VTT files are converted to CMFT during preprocessing in Azure and local modes
+- Source VTT files are excluded from manifest generation after conversion
 - Only generated CMFT files appear in manifests with FourCC "IMSC"
+
+File extensions are processed case-insensitively in both modes. If a raw VTT or TTML file cannot
+be parsed, it is skipped while processing continues for the remaining files.
 
 ## Error Handling
 
@@ -230,5 +249,13 @@ The summary provides:
 - VTT conversion statistics (successful/total)
 - List of files with sanitization warnings (automatically fixed HTML issues)
 - List of failed files with specific error reasons
+- List of raw (non-converted) VTT/TTML subtitles that were skipped because they could
+  not be parsed, with the reason for each
 - Manifest generation status (created or skipped)
 - Appears at the end of processing, after both VTT conversion and manifest generation
+
+### Manifest Generation Failures
+
+If manifest generation cannot proceed (for example, no `.ism` file and no supported media
+file can be found to derive the manifest name from), the tool prints a one-line error
+message and exits with a non-zero status instead of a raw stack trace.

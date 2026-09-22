@@ -25,7 +25,7 @@ class AzureBlobServiceClient:
 
         self.blob_service_client: BlobServiceClient = BlobServiceClient.from_connection_string(self.connection_string)
         self.container_client = self.blob_service_client.get_container_client(self.container_name)
-        self.is_multithreading = settings['is_multithreading']
+        self.is_multithreading = settings.get('is_multithreading', False)
 
     def get_list_of_blobs(self):
         return self.container_client.list_blobs()

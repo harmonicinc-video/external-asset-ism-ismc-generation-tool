@@ -1,3 +1,5 @@
+import sys
+
 from external_asset_ism_ismc_generation_tool.common.common import Common
 from external_asset_ism_ismc_generation_tool.common.logger.logger import Logger
 from external_asset_ism_ismc_generation_tool.media_data_parser.media_data_parser import MediaDataParser
@@ -13,6 +15,20 @@ from external_asset_ism_ismc_generation_tool.local_file_client.local_file_servic
 from external_asset_ism_ismc_generation_tool.local_data_handler.local_data_handler import LocalDataHandler
 from external_asset_ism_ismc_generation_tool.text_data_parser.vtt_to_cmft_converter import VttToCmftConverter
 from external_asset_ism_ismc_generation_tool.text_data_parser.model.conversion_summary import ConversionSummary, ProcessingSummary, ManifestResult
+from external_asset_ism_ismc_generation_tool.common.storage_adapter import AzureStorageAdapter, LocalStorageAdapter
+
+
+def resolve_settings(settings: dict) -> dict:
+    resolved_settings = dict(settings)
+    use_local = resolved_settings.get('local_directory') is not None
+
+    resolved_settings.setdefault('is_multithreading', False)
+    resolved_settings.setdefault('local_copy', False)
+    resolved_settings.setdefault('convert_webvtt', False)
+    resolved_settings.setdefault('overwrite_manifest', use_local)
+
+    return resolved_settings
+
 
 def convert_vtt_to_cmft(settings: dict, use_local: bool = False) -> ConversionSummary:
     """
@@ -35,12 +51,16 @@ def convert_vtt_to_cmft(settings: dict, use_local: bool = False) -> ConversionSu
         if use_local:
             logger.info("Using local directory mode")
             local_file_service_client: LocalFileServiceClient = LocalFileServiceClient(settings)
-            summary = VttToCmftConverter.convert_vtt_files_in_container(local_file_service_client)
+            summary = VttToCmftConverter.convert_vtt_files_in_container(
+                LocalStorageAdapter(local_file_service_client)
+            )
         else:
             logger.info("Using Azure mode")
             # Convert all VTT files in the container to CMFT
             az_blob_service_client: AzureBlobServiceClient = AzureBlobServiceClient(settings)
-            summary = VttToCmftConverter.convert_vtt_files_in_container(az_blob_service_client)
+            summary = VttToCmftConverter.convert_vtt_files_in_container(
+                AzureStorageAdapter(az_blob_service_client)
+            )
 
         if summary.total > 0:
             logger.info(f"VTT conversion completed: {summary.successful}/{summary.total} successful")
@@ -51,8 +71,9 @@ def convert_vtt_to_cmft(settings: dict, use_local: bool = False) -> ConversionSu
     
     except Exception as e:
         logger.error(f"Error during VTT to CMFT conversion: {e}")
-        # Return empty summary on error
-        return ConversionSummary()
+        summary = ConversionSummary()
+        summary.add_failure("VTT conversion setup", str(e))
+        return summary
 
 def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
                         client_manifest_name: str) -> tuple:
@@ -86,7 +107,8 @@ def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
     return ism_xml_string, ismc_xml_string
 
 
-def _find_available_manifest_names(base_name: str, blob_exists_fn) -> tuple:
+def _find_available_manifest_names(base_name: str, blob_exists_fn,
+                                   overwrite_manifest: bool = False) -> tuple:
     """
     Find a pair of ISM/ISMC filenames that don't conflict with existing blobs.
     Both names share the same suffix to keep them consistent.
@@ -94,6 +116,9 @@ def _find_available_manifest_names(base_name: str, blob_exists_fn) -> tuple:
     Args:
         base_name: The asset base name (without extension)
         blob_exists_fn: Callable that checks if a blob name already exists
+        overwrite_manifest: When True, always return the canonical (unsuffixed) pair.
+            When False, pick the first pair (canonical, then _new, _new2, ...) for
+            which neither name already exists.
         
     Returns:
         Tuple of (server_manifest_name, client_manifest_name)
@@ -102,9 +127,8 @@ def _find_available_manifest_names(base_name: str, blob_exists_fn) -> tuple:
     server_manifest_name = f'{base_name}.ism'
     client_manifest_name = f'{base_name}.ismc'
 
-    # If either the .ism or .ismc already exists, find a common suffix (_new, _new2, ...)
-    # where neither exists, so both manifests always have matching names.
-    if blob_exists_fn(server_manifest_name) or blob_exists_fn(client_manifest_name):
+    # When overwrite is disabled, choose a free pair that keeps both manifest suffixes aligned.
+    if not overwrite_manifest and (blob_exists_fn(server_manifest_name) or blob_exists_fn(client_manifest_name)):
         suffix = '_new'
         suffix_counter = 2
         while blob_exists_fn(f'{base_name}{suffix}.ism') or blob_exists_fn(f'{base_name}{suffix}.ismc'):
@@ -127,6 +151,7 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
     Returns:
         ManifestResult with generation status
     """
+    settings = resolve_settings(settings)
     logger: Logger = Logger("main")
     logger.info("Starting manifest generation process")
     
@@ -135,11 +160,15 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
     blob_media_data: BlobMediaData = BlobDataHandler.get_data_from_blobs(az_blob_service_client, settings)
     media_data: MediaData = MediaDataParser.get_media_data(blob_media_data.media_datas, blob_media_data.media_index_datas, settings.get('is_multithreading', False))
 
-    result = ManifestResult(manifest_name=blob_media_data.manifest_name)
+    result = ManifestResult(
+        manifest_name=blob_media_data.manifest_name,
+        subtitle_failures=blob_media_data.text_data_failures,
+    )
 
     # Determine matching ISM/ISMC names (with suffix if originals already exist)
     server_manifest_name, client_manifest_name = _find_available_manifest_names(
-        blob_media_data.manifest_name, az_blob_service_client.blob_exists
+        blob_media_data.manifest_name, az_blob_service_client.blob_exists,
+        settings['overwrite_manifest']
     )
 
     # Generate both manifests
@@ -155,12 +184,16 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
             f.write(ismc_xml_string.encode('utf-8'))
 
     # Upload to Azure
-    az_blob_service_client.upload_blob_to_container(server_manifest_name, ism_xml_string, overwrite=False)
+    az_blob_service_client.upload_blob_to_container(
+        server_manifest_name, ism_xml_string, overwrite=settings['overwrite_manifest']
+    )
     logger.info(f"{server_manifest_name} is created and stored to the {az_blob_service_client.container_client.container_name} container")
     result.ism_created = True
     result.ism_filename = server_manifest_name
 
-    az_blob_service_client.upload_blob_to_container(client_manifest_name, ismc_xml_string, overwrite=False)
+    az_blob_service_client.upload_blob_to_container(
+        client_manifest_name, ismc_xml_string, overwrite=settings['overwrite_manifest']
+    )
     logger.info(f"{client_manifest_name} is created and stored to the {az_blob_service_client.container_client.container_name} container")
     result.ismc_created = True
     result.ismc_filename = client_manifest_name
@@ -178,17 +211,23 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
     Returns:
         ManifestResult with generation status
     """
+    settings = resolve_settings(settings)
     logger: Logger = Logger("main")
     logger.info("Starting local manifest generation process")
 
     local_file_service_client: LocalFileServiceClient = LocalFileServiceClient(settings)
-    blob_media_data: BlobMediaData = LocalDataHandler.get_data_from_local_files(local_file_service_client)
+    blob_media_data: BlobMediaData = LocalDataHandler.get_data_from_local_files(local_file_service_client, settings)
     media_data: MediaData = MediaDataParser.get_media_data(blob_media_data.media_datas, blob_media_data.media_index_datas, settings.get('is_multithreading', False))
 
-    result = ManifestResult(manifest_name=blob_media_data.manifest_name)
+    result = ManifestResult(
+        manifest_name=blob_media_data.manifest_name,
+        subtitle_failures=blob_media_data.text_data_failures,
+    )
 
-    server_manifest_name = f'{blob_media_data.manifest_name}.ism'
-    client_manifest_name = f'{blob_media_data.manifest_name}.ismc'
+    server_manifest_name, client_manifest_name = _find_available_manifest_names(
+        blob_media_data.manifest_name, local_file_service_client.file_exists,
+        settings['overwrite_manifest']
+    )
 
     # Generate both manifests
     ism_xml_string, ismc_xml_string = _generate_manifests(
@@ -211,7 +250,7 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
 if __name__ == '__main__':
     settings_from_cli_arguments = CliArgumentsParser.parse()
     settings_from_config_file = ConfigFileParser.parse()
-    settings = Common.merge_dicts([settings_from_config_file, settings_from_cli_arguments])
+    settings = resolve_settings(Common.merge_dicts([settings_from_config_file, settings_from_cli_arguments]))
 
     use_local = 'local_directory' in settings and settings['local_directory'] is not None
     
@@ -227,11 +266,16 @@ if __name__ == '__main__':
         # convert_webvtt is disabled - record this in the summary without scanning storage
         overall_summary.conversion_summary = ConversionSummary(disabled=True)
 
-    if use_local:
-        manifest_result = generate_manifests_local_use(settings)
-    else:   
-        manifest_result = generate_manifests_azure_use(settings)
-    
+    try:
+        if use_local:
+            manifest_result = generate_manifests_local_use(settings)
+        else:
+            manifest_result = generate_manifests_azure_use(settings)
+    except Exception as e:
+        Logger("main").error(f"Manifest generation failed: {e}")
+        print(f"\nManifest generation failed: {e}")
+        sys.exit(1)
+
     overall_summary.manifest_result = manifest_result
     
     # Display comprehensive summary

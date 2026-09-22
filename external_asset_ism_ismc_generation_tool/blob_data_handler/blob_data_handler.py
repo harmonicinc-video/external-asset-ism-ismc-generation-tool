@@ -10,6 +10,8 @@ from external_asset_ism_ismc_generation_tool.file_processor.file_processor impor
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.media_format import MediaFormat
 from external_asset_ism_ismc_generation_tool.blob_data_handler.model.blob_media_data import BlobMediaData
 from external_asset_ism_ismc_generation_tool.text_data_parser.model.text_data_info import TextDataInfo
+from external_asset_ism_ismc_generation_tool.text_data_parser.model.text_data_result import TextDataResult
+from external_asset_ism_ismc_generation_tool.text_data_parser.model.conversion_summary import FileResult
 
 
 class BlobDataHandler:
@@ -42,25 +44,17 @@ class BlobDataHandler:
 
     @staticmethod
     def __process_blobs(blobs, az_blob_service_client: AzureBlobServiceClient, executor: ThreadPoolExecutor, settings: Optional[dict] = None) -> BlobMediaData:
-        manifest_name = ""
         media_datas = None
         media_index_datas = None
         text_datas_info = []
+        text_data_failures = []
         
         # Check if VTT files should be converted to CMFT (default: False)
         convert_webvtt = settings.get('convert_webvtt', False) if settings else False
         
         # Convert iterator to list to allow multiple iterations
         blobs_list = list(blobs)
-        
-        # First, check if an ISM manifest already exists in the container
-        # If it does, use its name (without extension) for the new manifests
-        for blob in blobs_list:
-            if blob.name.lower().endswith('.ism'):
-                # Extract manifest name from existing ISM file
-                manifest_name = blob.name.rsplit('.', 1)[0]
-                BlobDataHandler.__logger.info(f"Found existing manifest: {blob.name}, will use name: {manifest_name}")
-                break
+        manifest_name = Common.get_manifest_name([blob.name for blob in blobs_list])
 
         task_mapping = BlobDataHandler.__map_blob_tasks(blobs_list, az_blob_service_client, executor, convert_webvtt)
 
@@ -69,27 +63,21 @@ class BlobDataHandler:
             try:
                 key, result = task.result() if executor else task_mapping[task]
                 
-                # Set manifest name from first non-text file if not already set
-                # Skip VTT, TTML and CMFT files when determining manifest name
-                if not manifest_name and key:
-                    is_text_file = blob_name.lower().endswith(('.vtt', '.ttml', '.cmft'))
-                    if not is_text_file:
-                        manifest_name = key
-                        BlobDataHandler.__logger.info(f"Using manifest name from media file: {manifest_name}")
-
                 if MediaFormat.is_media_format(blob_name):
                     if not MediaFormat.is_mpi_format(blob_name):
                         media_datas = Common.merge_dicts([media_datas, result])
                     else:
                         media_index_datas = Common.merge_dicts([media_index_datas, result])
                 elif MediaFormat.is_text_format(blob_name):
-                    # VTT files are already filtered in __process_blob when convert_webvtt is true
-                    if result is not None:
-                        text_datas_info.append(result)
+                    if isinstance(result, TextDataResult):
+                        if result.text_data_info is not None:
+                            text_datas_info.append(result.text_data_info)
+                        else:
+                            text_data_failures.append(FileResult(blob_name, False, result.error_message or "Unknown error"))
             except Exception as e:
                 BlobDataHandler.__logger.error(f"Error processing blob {blob_name}: {e}")
 
-        return BlobMediaData(manifest_name, media_datas, media_index_datas, text_datas_info)
+        return BlobMediaData(manifest_name, media_datas, media_index_datas, text_datas_info, text_data_failures)
 
     @staticmethod
     def __process_blob(blob, az_blob_service_client: AzureBlobServiceClient, convert_webvtt: bool = True) -> Tuple[Optional[str], Optional[Union[Dict[str, Dict], TextDataInfo]]]:

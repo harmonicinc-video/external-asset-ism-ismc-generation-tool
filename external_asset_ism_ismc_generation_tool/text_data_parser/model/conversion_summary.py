@@ -68,6 +68,7 @@ class ManifestResult:
     manifest_name: str = ""
     ism_filename: str = ""
     ismc_filename: str = ""
+    subtitle_failures: List[FileResult] = field(default_factory=list)
 
 
 @dataclass
@@ -104,6 +105,11 @@ class ProcessingSummary:
             elif self.manifest_result.ismc_skipped:
                 ismc_name = self.manifest_result.ismc_filename or f"{self.manifest_result.manifest_name}.ismc"
                 lines.append(f"  ⊘ Client manifest skipped: {ismc_name} (already exists)")
+
+            if self.manifest_result.subtitle_failures:
+                lines.append("  Skipped subtitles:")
+                for failure in self.manifest_result.subtitle_failures:
+                    lines.append(f"    ✗ {failure.filename}: {failure.error_message}")
         
 
 

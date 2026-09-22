@@ -65,6 +65,28 @@ class Common:
         return key, format
 
     @staticmethod
+    def get_manifest_name(file_names: List[str]) -> str:
+        """
+        Deterministically pick the manifest base name from a directory/container listing.
+        Prefers an existing (case-insensitively first) `.ism` file's base name; otherwise
+        uses the first supported non-index media filename. Text, CMFT, and MPI index
+        files are never used as the source. Raises ValueError if no candidate exists.
+        """
+        sorted_file_names = sorted(file_names, key=str.casefold)
+
+        for file_name in sorted_file_names:
+            if file_name.lower().endswith('.ism'):
+                return file_name.rsplit('.', 1)[0]
+
+        for file_name in sorted_file_names:
+            if MediaFormat.is_media_format(file_name) and not (
+                MediaFormat.is_mpi_format(file_name) or file_name.lower().endswith('.cmft')
+            ):
+                return file_name.rsplit('.', 1)[0]
+
+        raise ValueError("Cannot determine manifest name: no ISM or supported media file found")
+
+    @staticmethod
     def get_last_track_id(mp4_track_info: list) -> int:
         return max(track.track_id for track in mp4_track_info) if mp4_track_info else 1
 

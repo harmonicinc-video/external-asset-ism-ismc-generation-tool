@@ -1,7 +1,7 @@
 {
-  "connection_string": "",
+  "connection_string": "DefaultEndpointsProtocol=http;AccountName=ams1;AccountKey=a2V5MV9vZl9hbXMx;BlobEndpoint=http://127.0.0.1:10000/ams1;",
   "account_name": "",
   "account_key": "",
-  "container_name": "",
-  "convert_webvtt": false
+  "container_name": "asset-amdocs-vubi",
+  "convert_webvtt": true
 }

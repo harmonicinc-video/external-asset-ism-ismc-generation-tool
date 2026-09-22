@@ -12,6 +12,7 @@ import struct
 import pytest
 
 from external_asset_ism_ismc_generation_tool.media_data_parser.azure_media_data_parser import AzureMediaDataParser
+from external_asset_ism_ismc_generation_tool.media_data_parser.media_file_data_reader import MediaFileDataReader
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.atom.atom_type import AtomType
 
 
@@ -176,7 +177,7 @@ class TestExtendedBoxSize:
                 return 0xFFFFFFFF
 
         with pytest.raises(ValueError, match="is too large"):
-            AzureMediaDataParser._AzureMediaDataParser__build_standard_box("moov", _FakeHugeBody())
+            MediaFileDataReader.build_standard_box("moov", _FakeHugeBody())
 
     def test_scan_fragment_boxes_skips_huge_mdat_without_downloading_its_body(self):
         # A multi-gigabyte 'mdat' between two 'moof' boxes must be skipped via

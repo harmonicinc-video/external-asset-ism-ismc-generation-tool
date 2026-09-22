@@ -13,6 +13,7 @@ import pytest
 
 from external_asset_ism_ismc_generation_tool.local_file_client.local_file_service_client import LocalFileServiceClient
 from external_asset_ism_ismc_generation_tool.media_data_parser.local_media_data_parser import LocalMediaDataParser
+from external_asset_ism_ismc_generation_tool.media_data_parser.media_file_data_reader import MediaFileDataReader
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.atom.atom_type import AtomType
 
 
@@ -49,6 +50,15 @@ class TestExtendedBoxSize:
 
         assert media_data[AtomType.MOOV_ATOM_TYPE.value] == moov
         assert media_data["moofs"] == []
+
+    def test_get_moov_data_reads_only_the_moov_box(self, tmp_path):
+        ftyp = _box(b"ftyp", b"isom")
+        moov = _box(b"moov", b"\x00" * 16)
+        client = _make_client(tmp_path, "moov_only.mp4", ftyp + moov)
+
+        media_data = LocalMediaDataParser.get_moov_data(client, "moov_only.mp4")
+
+        assert media_data == {"moov": moov, "moofs": []}
 
     def test_find_and_process_moof_atoms_skips_extended_size_mdat(self, tmp_path):
         # A fragmented file where an extended-size 'mdat' sits between two
@@ -177,7 +187,7 @@ class TestExtendedBoxSize:
                 return 0xFFFFFFFF
 
         with pytest.raises(ValueError, match="is too large"):
-            LocalMediaDataParser._LocalMediaDataParser__build_standard_box("moov", _FakeHugeBody())
+            MediaFileDataReader.build_standard_box("moov", _FakeHugeBody())
 
     def test_scan_fragment_boxes_skips_huge_mdat_without_downloading_its_body(self):
         # A multi-gigabyte 'mdat' between two 'moof' boxes must be skipped via

@@ -2,6 +2,7 @@
 Simple test for main.py functions
 """
 import os
+import subprocess
 import sys
 import pytest
 from unittest.mock import Mock, patch
@@ -69,9 +70,10 @@ class TestConvertVttToCmft:
         # Execute
         result = convert_vtt_to_cmft(settings, use_local=True)
         
-        # Verify - should return empty summary on error
-        assert result.total == 0
+        assert result.total == 1
         assert result.successful == 0
+        assert result.failed == 1
+        assert result.results[0].filename == 'VTT conversion setup'
 
 
 class TestGenerateManifestsLocal:
@@ -354,6 +356,25 @@ class TestGenerateManifestsAzure:
         upload_calls = mock_client_instance.upload_blob_to_container.call_args_list
         assert 'test_manifest_new2.ism' in upload_calls[0][0]
         assert 'test_manifest_new2.ismc' in upload_calls[1][0]
+
+
+class TestCliErrorHandling:
+    """Test that the CLI reports a clean error instead of a raw traceback."""
+
+    def test_no_media_or_manifest_source_reports_clean_error(self, tmp_path):
+        (tmp_path / "captions_ENG.vtt").write_text(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHi\n", encoding="utf-8"
+        )
+
+        main_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "main.py")
+        result = subprocess.run(
+            [sys.executable, main_path, f"-local_directory={tmp_path}"],
+            capture_output=True, text=True,
+        )
+
+        assert result.returncode != 0
+        assert "Traceback" not in result.stdout
+        assert "Manifest generation failed" in result.stdout
 
 
 if __name__ == '__main__':

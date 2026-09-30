@@ -1,5 +1,5 @@
 import math
-from typing import Tuple, Dict, List, Union
+from typing import Any, Tuple, Dict, List, Union
 from concurrent.futures import ProcessPoolExecutor
 from os import cpu_count
 from tools.pymp4.src.pymp4.parser import Box
@@ -182,32 +182,47 @@ class MediaDataParser:
         return media_track_info_list
 
     @staticmethod
-    def __get_moof_fragment_duration(trun_atom: Box) -> int:
-        return sum(sample.sample_duration for sample in trun_atom.sample_info)
+    def __get_moof_fragment_sample_total(trun_atom: Any, tfhd_atom: Any, trex_atom: Any,
+                                         field_name: str) -> int:
+        track_id = tfhd_atom.track_ID
+        total = 0
+        for sample in trun_atom.sample_info:
+            value = getattr(sample, field_name)
+            if value is None:
+                default_field_name = f'default_{field_name}'
+                tfhd_default = getattr(tfhd_atom, default_field_name, None)
+                trex_default = getattr(trex_atom, default_field_name, None) if trex_atom else None
+                if tfhd_default is not None:
+                    value = tfhd_default
+                elif trex_atom is not None and trex_atom.track_ID == track_id and trex_default not in (None, 0):
+                    value = trex_default
+            if value is None:
+                raise ValueError(
+                    f"Cannot calculate moof fragment {field_name}: sample value and defaults are missing for track {track_id}"
+                )
+            total += value
+        return total
 
     @staticmethod
-    def __get_moof_fragment_size(trun_atom: Box) -> int:
-        return sum(sample.sample_size for sample in trun_atom.sample_info)
+    def __get_moof_fragment_duration(trun_atom: Any, tfhd_atom: Any, trex_atom: Any) -> int:
+        return MediaDataParser.__get_moof_fragment_sample_total(
+            trun_atom, tfhd_atom, trex_atom, 'sample_duration'
+        )
 
     @staticmethod
-    def __is_default_sample_duration_set(track_id: int, atom: Box) -> bool:
-        return atom and atom.track_ID == track_id and atom.default_sample_duration
-
-    @staticmethod
-    def __is_default_sample_size_set(track_id: int, trex_atom: Box) -> bool:
-        return trex_atom and trex_atom.track_ID == track_id and trex_atom.default_sample_size
+    def __get_moof_fragment_size(trun_atom: Any, tfhd_atom: Any, trex_atom: Any) -> int:
+        return MediaDataParser.__get_moof_fragment_sample_total(
+            trun_atom, tfhd_atom, trex_atom, 'sample_size'
+        )
 
     @staticmethod
     def __fill_moof_fragment(moof_fragments: Dict[int, List], tfhd_atom: Box, trun_atom: Box, trex_atom: Box, timescale: int) -> None:
         track_id = tfhd_atom.track_ID
-        sample_count = trun_atom.sample_count
         fragment = moof_fragments.setdefault(track_id, [[], []])
-        duration = (trex_atom.default_sample_duration * sample_count if MediaDataParser.__is_default_sample_duration_set(track_id, trex_atom)
-                    else tfhd_atom.default_sample_duration * sample_count if MediaDataParser.__is_default_sample_duration_set(track_id, tfhd_atom)
-                    else MediaDataParser.__get_moof_fragment_duration(trun_atom))
+        duration = MediaDataParser.__get_moof_fragment_duration(trun_atom, tfhd_atom, trex_atom)
         duration /= timescale
         fragment[0].append(duration)
-        size = trex_atom.default_sample_size * sample_count if MediaDataParser.__is_default_sample_size_set(track_id, trex_atom) else MediaDataParser.__get_moof_fragment_size(trun_atom)
+        size = MediaDataParser.__get_moof_fragment_size(trun_atom, tfhd_atom, trex_atom)
         fragment[1].append(size)
 
     @staticmethod

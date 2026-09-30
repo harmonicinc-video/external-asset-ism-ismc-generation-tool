@@ -194,7 +194,7 @@ class MediaDataParser:
                 trex_default = getattr(trex_atom, default_field_name, None) if trex_atom else None
                 if tfhd_default is not None:
                     value = tfhd_default
-                elif trex_atom is not None and trex_atom.track_ID == track_id and trex_default is not None:
+                elif trex_atom is not None and trex_atom.track_ID == track_id and trex_default not in (None, 0):
                     value = trex_default
             if value is None:
                 raise ValueError(

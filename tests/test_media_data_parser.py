@@ -84,11 +84,13 @@ def test_fragment_preserves_zero_tfhd_defaults_over_trex_defaults():
     assert sizes == [0]
 
 
-def test_fragment_preserves_zero_trex_defaults():
-    durations, sizes = _fill_fragment([_sample()])
+@pytest.mark.parametrize("missing_field", ["sample_duration", "sample_size"])
+def test_fragment_rejects_zero_trex_defaults_when_no_other_value_exists(missing_field):
+    sample = _sample(duration=1000, size=512)
+    setattr(sample, missing_field, None)
 
-    assert durations == [0.0]
-    assert sizes == [0]
+    with pytest.raises(ValueError, match=f"{missing_field}.*defaults are missing.*track 1"):
+        _fill_fragment([sample])
 
 
 def test_fragment_prefers_tfhd_defaults_over_trex_defaults():

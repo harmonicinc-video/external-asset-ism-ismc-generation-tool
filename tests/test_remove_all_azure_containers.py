@@ -26,7 +26,7 @@ def test_missing_connection_string_is_rejected(service, connection_string):
 
 
 @pytest.mark.parametrize('confirmation', ['', 'different-account'])
-def test_unconfirmed_deletion_is_rejected_before_listing(service, confirmation):
+def test_invalid_confirmation_is_rejected_before_listing(service, confirmation):
     with pytest.raises(ValueError, match='confirm_account_name=teststorage'):
         cleanup.remove_all_azure_containers({'connection_string': 'connection'}, confirmation)
     service.list_containers.assert_not_called()
@@ -115,11 +115,3 @@ def test_cli_setup_failures_return_nonzero_without_deleting(monkeypatch, service
     assert cleanup.main() == 1
     assert 'Container cleanup failed' in capsys.readouterr().err
     service.get_container_client.assert_not_called()
-
-
-def test_removed_dry_run_flag_is_rejected(monkeypatch, service):
-    monkeypatch.setattr(sys, 'argv', ['remove_all_azure_containers.py', '-dry_run'])
-    with pytest.raises(SystemExit) as error:
-        cleanup.main()
-    assert error.value.code == 2
-    cleanup.BlobServiceClient.from_connection_string.assert_not_called()

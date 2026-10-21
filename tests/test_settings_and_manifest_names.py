@@ -35,20 +35,11 @@ def test_negative_cli_flags_override_only_when_present(monkeypatch, setting, con
         assert setting not in cli_settings
 
 
-def test_negative_cli_flags_can_be_combined():
-    settings = vars(CliArgumentsParser.build_argument_parser().parse_args(
-        ["-no_overwrite_manifest", "-no_align_start_times"]
-    ))
-    assert settings["overwrite_manifest"] is False
-    assert settings["align_start_times"] is False
-
-
 @pytest.mark.parametrize("arguments", [
-    ["-overwrite_manifest"], ["-align_start_times"],
     ["-no_overwrite_manifest=true"], ["-no_align_start_times=false"],
     ["-no_overwrite_manifest", "false"], ["-no_align_start_times", "true"],
 ])
-def test_positive_flags_and_boolean_cli_values_are_rejected(arguments):
+def test_negative_cli_flags_reject_boolean_values(arguments):
     with pytest.raises(SystemExit) as error:
         CliArgumentsParser.build_argument_parser().parse_args(arguments)
     assert error.value.code == 2

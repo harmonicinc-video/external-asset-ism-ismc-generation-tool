@@ -1,8 +1,36 @@
 from types import SimpleNamespace
+from concurrent.futures import ThreadPoolExecutor
+from fractions import Fraction
 
 import pytest
 
 from external_asset_ism_ismc_generation_tool.media_data_parser.media_data_parser import MediaDataParser
+from external_asset_ism_ismc_generation_tool.media_data_parser.model.media_track_info import MediaTrackInfo
+from external_asset_ism_ismc_generation_tool.media_data_parser.model.track_type import TrackType
+
+
+@pytest.mark.parametrize('multithreading', [False, True])
+def test_invalid_edits_abort_generation_in_both_execution_modes(monkeypatch, multithreading):
+    def fail_parse(blob_name, media_data):
+        raise ValueError(f'{blob_name}: invalid edit list')
+
+    monkeypatch.setattr(MediaDataParser, 'parse_media_data', fail_parse)
+    monkeypatch.setattr(
+        'external_asset_ism_ismc_generation_tool.media_data_parser.media_data_parser.ProcessPoolExecutor',
+        ThreadPoolExecutor,
+    )
+    with pytest.raises(ValueError, match='broken.mp4.*invalid edit list'):
+        MediaDataParser.get_media_data({'broken.mp4': {}}, is_multithreading=multithreading)
+
+
+def test_mpi_replacement_keeps_chunk_timing_and_start_together():
+    track = MediaTrackInfo(TrackType.VIDEO, '1000', 1, 2, 'AVC1', [2, 2], 'video.mp4')
+    index = MediaTrackInfo(TrackType.VIDEO, '1000', 1, 1, 'AVC1', [3], 'video.mpi', start_time=Fraction(48, 25))
+    updated = MediaDataParser._MediaDataParser__update_media_track_info([[track], [index]])[0]
+    assert updated.start_time == Fraction(48, 25)
+    assert updated.chunk_datas == [3]
+    assert updated.chunks == 1
+    assert updated.index_blob_name == 'video.mpi'
 
 
 def _sample(duration=None, size=None):

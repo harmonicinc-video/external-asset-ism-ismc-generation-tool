@@ -806,6 +806,28 @@ WebVTTSourceLabelBox = Struct(
     "label" / GreedyString("utf8")
 )
 
+EditListBox = Struct(
+    "type" / Const(b"elst"),
+    "version" / OneOf(Int8ub, (0, 1)),
+    "flags" / Int24ub,
+    "entries" / PrefixedArray(Int32ub, Struct(
+        "segment_duration" / IfThenElse(this._.version == 1, Int64ub, Int32ub),
+        "media_time" / IfThenElse(this._.version == 1, Int64sb, Int32sb),
+        "media_rate_integer" / Int16sb,
+        "media_rate_fraction" / Int16sb
+    ))
+)
+
+CompositionOffsetBox = Struct(
+    "type" / Const(b"ctts"),
+    "version" / OneOf(Int8ub, (0, 1)),
+    "flags" / Int24ub,
+    "entries" / PrefixedArray(Int32ub, Struct(
+        "sample_count" / Int32ub,
+        "sample_offset" / IfThenElse(this._.version == 1, Int32sb, Int32ub)
+    ))
+)
+
 ContainerBoxLazy = LazyBound(lambda ctx: ContainerBox)
 
 
@@ -842,6 +864,9 @@ Box = PrefixedIncludingSize(Int32ub, Struct(
         b"mehd": MovieExtendsHeaderBox,
         b"trex": TrackExtendsBox,
         b"trak": ContainerBoxLazy,
+        b"edts": ContainerBoxLazy,
+        b"elst": EditListBox,
+        b"ctts": CompositionOffsetBox,
         b"mdia": ContainerBoxLazy,
         b"tkhd": TrackHeaderBox,
         b"mdat": MovieDataBox,

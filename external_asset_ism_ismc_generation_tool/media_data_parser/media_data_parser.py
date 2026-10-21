@@ -151,6 +151,7 @@ class MediaDataParser:
 
             except Exception as e:
                 MediaDataParser.__logger.error(f"Error processing blob {blob_name}: {e}")
+                raise ValueError(f"Error processing blob {blob_name}: {e}") from e
 
         media_data.media_track_info_list.sort(key=lambda track: (track.track_id, int(track.bit_rate)))
 
@@ -236,6 +237,7 @@ class MediaDataParser:
         track.index_blob_name = track_index.blob_name
         track.chunks = track_index.chunks
         track.chunk_datas = track_index.chunk_datas
+        track.start_time = track_index.start_time
         track.bit_rate = track_index.bit_rate
         MediaDataParser.__logger.info(f'Changed chunks, bitrate, added index_blob_name {track.index_blob_name} for {track.blob_name} with track_id {track.track_id}')
 

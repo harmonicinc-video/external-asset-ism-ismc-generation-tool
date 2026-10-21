@@ -21,7 +21,7 @@ tests is a module for testing external_asset_ism_ismc_generation tool.
 gpg --quiet --batch --yes --decrypt-files --passphrase="$TEST_ASSET_KEY" ./data/*.gpg
 
 ## HowTo run
-In <work_space>/external_asset_ism_ismc_generation_tool/external_asset_ism_ismc_generation_tool/tests
+Run from the repository root:
 ```
 pytest [path_to_test_file[::TestClass::test_case]]
 ```
@@ -31,12 +31,30 @@ pytest
 ```
 To run all tests from test_ismc_generation.py:
 ```
-pytest integration_tests/test_ismc_generation.py
+pytest tests/integration_tests/test_ismc_generation.py
 ```
 To run test_check_generated_ism_manifest_2_mp4 only:
 ```
-pytest integration_tests/test_ism_generation.py::TestIsmGeneration::test_check_generated_ism_manifest_2_mp4
+pytest tests/integration_tests/test_ism_generation.py::TestIsmGeneration::test_check_generated_ism_manifest_2_mp4
 ```
+
+## Timing and configuration regressions
+
+```bash
+python3 -m pytest tests/test_local_media_data_parser.py tests/test_media_data_parser.py tests/test_settings_and_manifest_names.py tests/test_main.py -q
+```
+
+Synthetic binary boxes and track metadata cover version 0/1 edit lists, signed
+composition offsets, movie/media timescales, leading empty edits, media trims,
+finite/open-ended durations, and both room02 manifest timelines without requiring
+the large source MP4. Coverage also includes chunk-repeat grouping, whole-chunk
+alignment trims, non-overlapping tracks, unchanged subtitles, non-mutating mode
+switching, MPI start-time replacement, invalid edit metadata, worker error
+propagation, JSON boolean validation, and the value-free negative CLI flags.
+
+Existing JSON fixtures exercise full media parsing and manifest generation for
+multiple codecs, renditions, index files, and subtitle formats. These tests do not
+run the downstream OTT packager or validate resulting DASH/HLS playback.
 
 ## How to prepare data for tests
 

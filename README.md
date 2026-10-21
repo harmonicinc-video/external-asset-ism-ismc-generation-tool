@@ -78,7 +78,9 @@ Azure connection string can be found in Azure Portal → Storage container → A
 ```
 python3 main.py -is_multithreading
 ```
-Currently ISM/ISMC generation tool supports two modes: one-threaded and multi-threaded. Multi-threaded mode uses the maximum amount of threads your system can handle.
+Parsing runs in a single process by default. The `-is_multithreading` flag enables
+worker processes using the available CPU count. A media parsing failure aborts manifest
+generation in either mode; it is not silently omitted from the output.
 
 ```
 python3 main.py -local_copy
@@ -86,19 +88,77 @@ python3 main.py -local_copy
 Run with local generation of ISM/ISMC (debug)
 
 ```
-python3 main.py -overwrite_manifest
 python3 main.py -no_overwrite_manifest
 ```
-Control whether canonical manifest names are replaced. The default is `true` in local mode and
-`false` in Azure mode. When overwrite is disabled, the tool preserves existing manifests and
-creates a matching `_new`, `_new2`, ... ISM/ISMC pair.
+Disable replacement of canonical manifest names. This flag takes no value and sets
+`overwrite_manifest=false`, overriding the configuration file. When omitted, the configuration
+value is used; its default is `true` in local mode and `false` in Azure mode. When overwrite is
+disabled, the tool preserves existing manifests and creates a matching `_new`, `_new2`, ...
+ISM/ISMC pair. To enable overwriting explicitly, set `"overwrite_manifest": true` in the
+configuration file; there is no positive CLI flag.
 
 ### Configuration file
 The application also supports the following configuration options in `azure_config.json`:
 
 ### overwrite_manifest (boolean, mode-specific default)
 Controls whether canonical manifest names are replaced. When omitted, it defaults to `true` in
-local mode and `false` in Azure mode. Command-line overwrite flags take precedence over this value.
+local mode and `false` in Azure mode. The value-free `-no_overwrite_manifest` CLI flag overrides
+this value to `false`; omitting the flag leaves the configuration value unchanged.
+
+### align_start_times (boolean, default: true)
+MP4 edit lists (`edts/elst`, versions 0 and 1) are applied before generating the ISMC.
+Leading empty edits delay the presentation start; media-time edits trim the beginning
+of the media, and finite edit durations limit its end. Video composition offsets
+(`ctts`) are accounted for so that a composition-delay edit is not trimmed twice.
+Movie edit durations use the `mvhd` timescale, while media times use the track's
+`mdhd` timescale. ISMC timestamps use the manifest timescale (10,000,000 ticks/second).
+
+- **true**: align all audio/video streams to the latest A/V presentation start and
+  emit `StreamStartTimestamp` on each A/V `StreamIndex`. Earlier media is trimmed,
+  not shifted: subsequent segment boundaries and stream end times are preserved.
+  This is the downstream-packager compatibility mode. Subtitle timing is unchanged.
+- **false**: preserve individual edit-derived presentation starts in the first
+  `<c t="...">` and omit `StreamStartTimestamp`.
+
+Set this in `azure_config.json` for either local or Azure processing:
+```json
+{
+  "align_start_times": true
+}
+```
+The value-free CLI flag `-no_align_start_times` overrides this setting to `false`.
+When omitted, the configuration value is used, defaulting to `true`. To enable
+alignment explicitly, set `"align_start_times": true` in the configuration file;
+there is no positive CLI flag. Neither negative flag accepts `true` or `false` as a value.
+For example:
+```bash
+python3 main.py -local_directory=/path/to/assets -no_align_start_times
+```
+
+For `room02.mp4`, the video empty edit is 1.92 seconds and the audio media-time
+trim is 0.64 seconds. With alignment disabled, video starts at 1.92 seconds and
+audio starts at zero with a 3.2-second first segment (`room02_offsetV.ismc`).
+With alignment enabled, both start at 1.92 seconds and the first audio segment
+is 1.28 seconds (`room02_offsetAV.ismc`). The presentation duration is unchanged.
+
+Edit lists are the standard ISO BMFF mechanism for mapping media composition
+time onto movie presentation time; see the
+[ISO BMFF timing requirements](https://www.w3.org/TR/mse-byte-stream-format-isobmff/#iso-init-segments).
+Their translation into a packager's ISMC input is an interoperability contract:
+aligned starts and `StreamStartTimestamp` are not a universal MP4 requirement.
+Supported edit sequences are leading empty edits followed by one normal-rate
+media edit. Dwell/rate-changing edits and multiple media edits are rejected
+explicitly rather than silently producing incorrect timing. A zero media-edit
+duration extends through all remaining media. Alignment fails explicitly if
+an A/V track ends at or before the common start. Missing, malformed, or duplicate edit
+lists inside an edit box, nonpositive edit timescales, and edits that select no media
+also abort generation. An absent edit box or a valid empty edit list has no timing effect.
+Invalid `align_start_times` configuration values are reported as configuration errors;
+use JSON booleans, not strings such as `"false"`.
+
+The composition-delay mapping uses the initial `ctts` offset; it does not re-segment
+individual sample presentation timestamps or rewrite the MP4. End-to-end DASH/HLS
+playback still needs validation with the downstream packager.
 
 ### Manifest Generation Behavior
 When manifests are generated:
@@ -117,8 +177,27 @@ Controls how WebVTT files are handled:
 ## Utilities for Azure
 ```bash
 python3 upload_azure_asset.py -asset_zip_name=<zip_file>     # unzip and upload an asset in Azure Blob (before calling the main process)
-python3 remove_azure_asset.py     # remove an asset from Azure Blob
+python3 list_azure_containers.py                           # list all containers in the storage account
+python3 remove_azure_asset.py                              # delete the configured container and all its blobs
+python3 remove_all_azure_containers.py                      # list containers and show the deletion command; delete nothing
+python3 remove_all_azure_containers.py -confirm_account_name=<storage_account_name>
 ```
+
+These utilities read `azure_config.json`; command-line settings override the file.
+Listing and account-wide cleanup require `connection_string`. Single-asset removal
+uses `container_name` to select the container.
+
+**Warning:** `remove_all_azure_containers.py` deletes every listed container and all
+its blobs, not just the configured `container_name`. Without confirmation, the script
+only lists containers and hints at the command for deletion; there is no `-dry_run`
+option. Preview is optional: delete in one command by supplying the exact connected
+account name via `-confirm_account_name`. A wrong or empty confirmation is rejected;
+confirmation cannot be supplied through the configuration file. This operation
+cannot be undone by this tool; recoverability depends on Azure retention settings.
+The script reports each deletion, continues after individual Azure deletion errors,
+and exits nonzero if any deletion, listing, or setup operation fails. Containers
+created after the initial listing are not included. Account credentials need both
+container-listing and container-deletion permissions.
 
 ## Testing
 
@@ -128,6 +207,13 @@ pytest
 pytest tests/integration_tests/ -v # run test subset for manifest generation
 pytest tests/conversion_tests/ -v # run test subset for manifest generation
 ```
+
+Timing and CLI regressions can be run without the room02 MP4:
+```bash
+python3 -m pytest tests/test_local_media_data_parser.py tests/test_media_data_parser.py tests/test_settings_and_manifest_names.py tests/test_main.py -q
+```
+These cover binary edit-list versions, composition offsets, trimming, both room02
+timelines, repeat counts, MPI timing replacement, configuration precedence, and error paths.
 
 Generate JSON test assets with:
 ```bash

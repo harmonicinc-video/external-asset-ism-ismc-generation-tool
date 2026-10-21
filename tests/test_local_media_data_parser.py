@@ -1,6 +1,6 @@
 """
-Unit tests for LocalMediaDataParser, focused on ISO/IEC 14496-12 box header
-parsing (in particular the 64-bit extended box size / 'largesize' field).
+Unit tests for ISO/IEC 14496-12 box headers, edit-list presentation timing,
+and standard versus packager-aligned ISMC chunk serialization.
 
 These tests build small synthetic MP4-like files byte by byte instead of using
 the JSON test data fixtures used by the integration tests: the JSON fixtures
@@ -8,13 +8,22 @@ capture already-extracted moov data (post box-scanning), so they cannot
 exercise the raw top-level box scanning logic that these tests target.
 """
 import struct
+import xml.etree.ElementTree as ET
+from fractions import Fraction
+from types import SimpleNamespace
 
 import pytest
 
+from tools.pymp4.src.pymp4.parser import Box
 from external_asset_ism_ismc_generation_tool.local_file_client.local_file_service_client import LocalFileServiceClient
 from external_asset_ism_ismc_generation_tool.media_data_parser.local_media_data_parser import LocalMediaDataParser
 from external_asset_ism_ismc_generation_tool.media_data_parser.media_file_data_reader import MediaFileDataReader
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.atom.atom_type import AtomType
+from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.trak_parser import TRAKParser
+from external_asset_ism_ismc_generation_tool.media_data_parser.media_track_info_extractor import MediaTrackInfoExtractor
+from external_asset_ism_ismc_generation_tool.media_data_parser.model.media_track_info import MediaTrackInfo
+from external_asset_ism_ismc_generation_tool.media_data_parser.model.track_type import TrackType
+from external_asset_ism_ismc_generation_tool.mss_client_manifest.ismc_generator import IsmcGenerator
 
 
 def _box(box_type: bytes, payload: bytes = b"") -> bytes:
@@ -31,6 +40,188 @@ def _extended_box(box_type: bytes, payload: bytes = b"") -> bytes:
 def _make_client(tmp_path, file_name: str, content: bytes) -> LocalFileServiceClient:
     (tmp_path / file_name).write_bytes(content)
     return LocalFileServiceClient({"local_directory": str(tmp_path)})
+
+
+@pytest.mark.parametrize("version,entry_format", [(0, ">Ii hh"), (1, ">Qq hh")])
+def test_edit_list_versions(version, entry_format):
+    entries = struct.pack(entry_format, 1920, -1, 1, 0)
+    media_duration = 2**33 if version == 1 else 3886120
+    entries += struct.pack(entry_format, media_duration, 3600, 1, 0)
+    payload = struct.pack(">B3xI", version, 2) + entries
+    parsed = Box.parse(_box(b"edts", _box(b"elst", payload)))
+    edits = parsed.children[0].entries
+    assert edits[0].media_time == -1
+    assert edits[0].segment_duration == 1920
+    assert edits[1].media_time == 3600
+    assert edits[1].segment_duration == media_duration
+
+
+@pytest.mark.parametrize(
+    "track_type,media_time,empty_duration,composition_offset,edit_duration,expected_start,expected_chunks",
+    [
+        (TrackType.AUDIO, 30720, 0, 0, 10240, 0, [3.2, 3.84, 2.56]),
+        (TrackType.VIDEO, 1920, 1920, 1920, 10240, 1.92, [3.84, 3.84, 2.56]),
+        (TrackType.AUDIO, 215040, 0, 0, 10240, 0, [3.2, 2.56]),
+        (TrackType.AUDIO, 30720, 0, 0, 0, 0, [3.2, 3.84, 2.56]),
+        (TrackType.AUDIO, 30720, 0, 0, 5000, 0, [3.2, 1.8]),
+        (TrackType.VIDEO, 0, 0, 1920, 10240, 0.04, [3.84, 3.84, 2.52]),
+    ]
+)
+def test_edit_list_maps_track_timeline(track_type, media_time, empty_duration,
+                                      composition_offset, edit_duration, expected_start, expected_chunks):
+    entries = []
+    if empty_duration:
+        entries.append(struct.pack(">Ii hh", empty_duration, -1, 1, 0))
+    entries.append(struct.pack(">Ii hh", edit_duration, media_time, 1, 0))
+    edts = Box.parse(_box(b"edts", _box(b"elst", struct.pack(">II", 0, len(entries)) + b"".join(entries))))
+    parser = TRAKParser(SimpleNamespace(children=[edts]))
+    parser.get_timescale = lambda: 48000
+    extractor = MediaTrackInfoExtractor.__new__(MediaTrackInfoExtractor)
+    extractor.trak_parser = parser
+    extractor.movie_timescale = 1000
+    extractor.timescale = 48000
+    extractor.ctts_atom = SimpleNamespace(entries=[SimpleNamespace(sample_offset=composition_offset)])
+    extractor.track_type = track_type
+    extractor.blob_name = 'edits.mp4'
+    track = MediaTrackInfo(track_type, '1000', 1, 3, 'AACL', [3.84, 3.84, 2.56], 'edits.mp4')
+    extractor._MediaTrackInfoExtractor__extract_audio_track_info = lambda fragments: track
+    extractor._MediaTrackInfoExtractor__extract_video_track_info = lambda fragments: track
+    result = extractor.get_track_info({})
+    assert result.start_time == Fraction(str(expected_start))
+    assert result.chunk_datas == expected_chunks
+    assert result.chunks == len(expected_chunks)
+    manifest = ET.fromstring(IsmcGenerator.generate(12, [result], align_start_times=False))
+    assert manifest.find('StreamIndex/c').get('t') == str(round(expected_start * 10000000))
+
+
+def test_edit_list_rejects_a_media_start_beyond_the_track():
+    extractor = MediaTrackInfoExtractor.__new__(MediaTrackInfoExtractor)
+    extractor.trak_parser = SimpleNamespace(get_edit_timing=lambda timescale: (Fraction(0), Fraction(10), Fraction(1)))
+    extractor.movie_timescale = 1000
+    extractor.ctts_atom = None
+    extractor.track_type = TrackType.AUDIO
+    extractor.blob_name = 'empty-edit.mp4'
+    track = MediaTrackInfo(TrackType.AUDIO, '1000', 2, 1, 'AACL', [2], 'empty-edit.mp4')
+    extractor._MediaTrackInfoExtractor__extract_audio_track_info = lambda fragments: track
+    with pytest.raises(ValueError, match='Edit list selects no media.*empty-edit.mp4.*track 2'):
+        extractor.get_track_info({})
+
+
+@pytest.mark.parametrize("version,offset", [(0, 3600), (1, -3600)])
+def test_composition_offset_signedness(version, offset):
+    entry_format = ">Ii" if version == 1 else ">II"
+    payload = struct.pack(">B3xI", version, 1) + struct.pack(entry_format, 5, offset)
+    assert Box.parse(_box(b"ctts", payload)).entries[0].sample_offset == offset
+
+
+@pytest.mark.parametrize("align", [False, True])
+def test_room02_manifest_timing_modes(align):
+    audio = MediaTrackInfo(TrackType.AUDIO, '125374', 2, 1013, 'AACL',
+                           [3.2] + [3.84] * 1011 + [2.56], 'room02.mp4')
+    video = MediaTrackInfo(TrackType.VIDEO, '3998251', 1, 1013, 'AVC1',
+                           [3.84] * 1012 + [0.04], 'room02.mp4', start_time=Fraction(48, 25))
+    manifest = ET.fromstring(IsmcGenerator.generate(3888.04, [audio, video], align_start_times=align))
+    audio_stream, video_stream = manifest.findall('StreamIndex')
+    assert manifest.get('Duration') == '38880400000'
+    assert audio_stream.get('Chunks') == video_stream.get('Chunks') == '1013'
+    assert [chunk.attrib for chunk in audio_stream.findall('c')] == [
+        {'t': '19200000' if align else '0', 'd': '12800000' if align else '32000000', 'r': '1'},
+        {'d': '38400000', 'r': '1011'},
+        {'d': '25600000', 'r': '1'},
+    ]
+    assert [chunk.attrib for chunk in video_stream.findall('c')] == [
+        {'t': '19200000', 'd': '38400000', 'r': '1012'},
+        {'d': '400000', 'r': '1'},
+    ]
+    for stream in (audio_stream, video_stream):
+        assert stream.get('StreamStartTimestamp') == ('19200000' if align else None)
+    assert audio.start_time == 0
+    assert audio.chunk_datas == [3.2] + [3.84] * 1011 + [2.56]
+
+
+def test_alignment_discards_whole_chunks_and_preserves_remaining_boundaries():
+    audio = MediaTrackInfo(TrackType.AUDIO, '1000', 2, 4, 'AACL', [2, 2, 2, 2], 'audio.mp4')
+    video = MediaTrackInfo(TrackType.VIDEO, '2000', 1, 2, 'AVC1', [2, 2], 'video.mp4', start_time=5)
+    text = MediaTrackInfo(TrackType.TEXT, '100', 3, 1, 'IMSC', [8], 'subs.cmft')
+    manifest = ET.fromstring(IsmcGenerator.generate(9, [audio, video, text]))
+    audio_stream, video_stream, text_stream = manifest.findall('StreamIndex')
+    assert audio_stream.get('Chunks') == '2'
+    assert [chunk.attrib for chunk in audio_stream.findall('c')] == [
+        {'t': '50000000', 'd': '10000000', 'r': '1'},
+        {'d': '20000000', 'r': '1'},
+    ]
+    assert video_stream.find('c').get('t') == '50000000'
+    assert text_stream.find('c').get('t') == '0'
+    assert text_stream.get('StreamStartTimestamp') is None
+    standard = ET.fromstring(IsmcGenerator.generate(9, [audio, video, text], align_start_times=False))
+    assert standard.find('StreamIndex/c').attrib == {'t': '0', 'd': '20000000', 'r': '4'}
+
+
+def test_alignment_rejects_nonoverlapping_tracks():
+    audio = MediaTrackInfo(TrackType.AUDIO, '1000', 2, 1, 'AACL', [2], 'audio.mp4')
+    video = MediaTrackInfo(TrackType.VIDEO, '2000', 1, 1, 'AVC1', [2], 'video.mp4', start_time=3)
+    with pytest.raises(ValueError, match='No media remains'):
+        IsmcGenerator.generate(5, [audio, video])
+
+
+def test_tracks_with_different_presentation_starts_are_not_grouped():
+    early = MediaTrackInfo(TrackType.VIDEO, '1000', 1, 1, 'AVC1', [2], 'early.mp4')
+    late = MediaTrackInfo(TrackType.VIDEO, '2000', 1, 1, 'AVC1', [2], 'late.mp4', start_time=1)
+    manifest = ET.fromstring(IsmcGenerator.generate(3, [early, late], align_start_times=False))
+    assert len(manifest.findall('StreamIndex')) == 2
+
+
+@pytest.mark.parametrize("entries", [
+    [(1000, 0, 0, 0)],
+    [(1000, 0, 1, 1)],
+    [(1000, -2, 1, 0)],
+    [(1000, 0, 1, 0), (1000, 48000, 1, 0)],
+    [(1000, 0, 1, 0), (1000, -1, 1, 0)],
+    [(1000, -1, 1, 0)],
+])
+def test_unsupported_edit_lists_fail_explicitly(entries):
+    payload = struct.pack(">II", 0, len(entries))
+    payload += b''.join(struct.pack(">Ii hh", *entry) for entry in entries)
+    edts = Box.parse(_box(b"edts", _box(b"elst", payload)))
+    parser = TRAKParser(SimpleNamespace(children=[edts]))
+    parser.get_timescale = lambda: 48000
+    with pytest.raises(ValueError, match='edit'):
+        parser.get_edit_timing(1000)
+
+
+@pytest.mark.parametrize("payload", [
+    b'',
+    _box(b'elst', struct.pack('>II', 0, 1)),
+    _box(b'elst', struct.pack('>II', 2 << 24, 0)),
+])
+def test_missing_or_malformed_edit_list_is_not_silently_ignored(payload):
+    edts = Box.parse(_box(b'edts', payload))
+    parser = TRAKParser(SimpleNamespace(children=[edts]))
+    with pytest.raises(ValueError, match='missing or malformed edit list'):
+        parser.get_edit_timing(1000)
+
+
+def test_absent_or_empty_edit_list_has_no_timing_effect():
+    assert TRAKParser(SimpleNamespace(children=[])).get_edit_timing(1000) is None
+    edts = Box.parse(_box(b'edts', _box(b'elst', struct.pack('>II', 0, 0))))
+    assert TRAKParser(SimpleNamespace(children=[edts])).get_edit_timing(1000) is None
+
+
+@pytest.mark.parametrize('movie_timescale,media_timescale', [(0, 48000), (-1, 48000), (1000, 0), (1000, -1)])
+def test_edit_lists_require_positive_timescales(movie_timescale, media_timescale):
+    payload = struct.pack('>II', 0, 1) + struct.pack('>Ii hh', 1000, 0, 1, 0)
+    edts = Box.parse(_box(b'edts', _box(b'elst', payload)))
+    parser = TRAKParser(SimpleNamespace(children=[edts]))
+    parser.get_timescale = lambda: media_timescale
+    with pytest.raises(ValueError, match='positive movie and media timescales'):
+        parser.get_edit_timing(movie_timescale)
+
+
+def test_multiple_edit_list_boxes_are_rejected():
+    elst = _box(b'elst', struct.pack('>II', 0, 0))
+    parser = TRAKParser(SimpleNamespace(children=[Box.parse(_box(b'edts', elst + elst))]))
+    with pytest.raises(ValueError, match='exactly one edit list'):
+        parser.get_edit_timing(1000)
 
 
 class TestExtendedBoxSize:

@@ -21,19 +21,37 @@ def test_omitted_boolean_cli_options_do_not_override_config_values(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("arguments", "expected_value"),
-    [
-        (["-overwrite_manifest"], True),
-        (["-no_overwrite_manifest"], False),
-    ],
+    "setting", ["overwrite_manifest", "align_start_times"],
 )
-def test_cli_overwrite_manifest_explicitly_overrides_config(monkeypatch, arguments, expected_value):
+@pytest.mark.parametrize("config_value", [True, False])
+@pytest.mark.parametrize("disable", [True, False])
+def test_negative_cli_flags_override_only_when_present(monkeypatch, setting, config_value, disable):
+    arguments = [f"-no_{setting}"] if disable else []
     monkeypatch.setattr(sys, "argv", ["main.py", *arguments])
-
     cli_settings = CliArgumentsParser.parse()
-    settings = Common.merge_dicts([{"overwrite_manifest": not expected_value}, cli_settings])
+    settings = Common.merge_dicts([{setting: config_value}, cli_settings])
+    assert settings[setting] is (False if disable else config_value)
+    if not disable:
+        assert setting not in cli_settings
 
-    assert settings["overwrite_manifest"] is expected_value
+
+def test_negative_cli_flags_can_be_combined():
+    settings = vars(CliArgumentsParser.build_argument_parser().parse_args(
+        ["-no_overwrite_manifest", "-no_align_start_times"]
+    ))
+    assert settings["overwrite_manifest"] is False
+    assert settings["align_start_times"] is False
+
+
+@pytest.mark.parametrize("arguments", [
+    ["-overwrite_manifest"], ["-align_start_times"],
+    ["-no_overwrite_manifest=true"], ["-no_align_start_times=false"],
+    ["-no_overwrite_manifest", "false"], ["-no_align_start_times", "true"],
+])
+def test_positive_flags_and_boolean_cli_values_are_rejected(arguments):
+    with pytest.raises(SystemExit) as error:
+        CliArgumentsParser.build_argument_parser().parse_args(arguments)
+    assert error.value.code == 2
 
 
 @pytest.mark.parametrize(
@@ -47,6 +65,26 @@ def test_cli_overwrite_manifest_explicitly_overrides_config(monkeypatch, argumen
 )
 def test_resolve_settings_applies_mode_specific_overwrite_default(settings, expected_overwrite):
     assert resolve_settings(settings)["overwrite_manifest"] is expected_overwrite
+
+
+@pytest.mark.parametrize("settings,expected", [({}, True), ({"align_start_times": False}, False)])
+def test_alignment_defaults_on_and_preserves_explicit_config(settings, expected):
+    assert resolve_settings(settings)["align_start_times"] is expected
+
+
+@pytest.mark.parametrize("local", [True, False])
+def test_omitted_negative_cli_flags_preserve_mode_defaults(monkeypatch, local):
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+    settings = {"local_directory": "/media"} if local else {}
+    settings = Common.merge_dicts([settings, CliArgumentsParser.parse()])
+    resolved = resolve_settings(settings)
+    assert resolved["overwrite_manifest"] is local
+    assert resolved["align_start_times"] is True
+
+
+def test_alignment_requires_json_boolean():
+    with pytest.raises(ValueError, match='align_start_times must be a boolean'):
+        resolve_settings({"align_start_times": "false"})
 
 
 @pytest.mark.parametrize(

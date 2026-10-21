@@ -63,19 +63,19 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[0].quality_level_list[0].sampling_rate == '24000'
                         with Allure.Step("Verify c elements attributes for the first audio track"):
                             assert ismc_object.stream_indexes[0].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '20053333'
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '19600000'
 
                             assert not ismc_object.stream_indexes[0].chunk_datas[1].time_start
-                            assert ismc_object.stream_indexes[0].chunk_datas[1].duration == '20053334'
+                            assert ismc_object.stream_indexes[0].chunk_datas[1].duration == '20053333'
 
                             assert not ismc_object.stream_indexes[0].chunk_datas[2].time_start
-                            assert ismc_object.stream_indexes[0].chunk_datas[2].duration == '20053333'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2].duration == '20053334'
 
                             assert not ismc_object.stream_indexes[0].chunk_datas[2138].time_start
-                            assert ismc_object.stream_indexes[0].chunk_datas[2138].duration == '20053333'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2138].duration == '20053334'
 
                             assert not ismc_object.stream_indexes[0].chunk_datas[2139].time_start
-                            assert ismc_object.stream_indexes[0].chunk_datas[2139].duration == '16640000'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2139].duration == '16240000'
 
                     with Allure.Step("Verify StreamIndexes attributes for the second audio track"):
                         assert ismc_object.stream_indexes[1].chunks == '3208'
@@ -98,19 +98,19 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[1].quality_level_list[0].sampling_rate == '24000'
                         with Allure.Step("Verify c elements attributes for the second audio track"):
                             assert ismc_object.stream_indexes[1].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '20053333'
+                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '19600000'
 
                             assert not ismc_object.stream_indexes[1].chunk_datas[1].time_start
-                            assert ismc_object.stream_indexes[1].chunk_datas[1].duration == '20053334'
+                            assert ismc_object.stream_indexes[1].chunk_datas[1].duration == '20053333'
 
                             assert not ismc_object.stream_indexes[1].chunk_datas[2].time_start
-                            assert ismc_object.stream_indexes[1].chunk_datas[2].duration == '20053333'
+                            assert ismc_object.stream_indexes[1].chunk_datas[2].duration == '20053334'
 
                             assert not ismc_object.stream_indexes[1].chunk_datas[2138].time_start
-                            assert ismc_object.stream_indexes[1].chunk_datas[2138].duration == '20053333'
+                            assert ismc_object.stream_indexes[1].chunk_datas[2138].duration == '20053334'
 
                             assert not ismc_object.stream_indexes[1].chunk_datas[2139].time_start
-                            assert ismc_object.stream_indexes[1].chunk_datas[2139].duration == '16640000'
+                            assert ismc_object.stream_indexes[1].chunk_datas[2139].duration == '16240000'
 
                     with Allure.Step("Verify StreamIndexes attributes for the video track"):
                         assert ismc_object.stream_indexes[2].chunks == '3217'
@@ -203,7 +203,7 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[0].quality_level_list[0].sampling_rate == '48000'
                         with Allure.Step("Verify c elements attributes for the first audio track"):
                             assert ismc_object.stream_indexes[0].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '20053333'
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '19613333'
 
                             assert not ismc_object.stream_indexes[0].chunk_datas[1].time_start
                             assert ismc_object.stream_indexes[0].chunk_datas[1].duration == '20053334'
@@ -215,7 +215,7 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[0].chunk_datas[2759].duration == '20053334'
 
                             assert not ismc_object.stream_indexes[0].chunk_datas[2760].time_start
-                            assert ismc_object.stream_indexes[0].chunk_datas[2760].duration == '6826667'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2760].duration == '6733333'
 
                     with Allure.Step("Verify StreamIndexes attributes for the second audio track"):
                         assert ismc_object.stream_indexes[1].chunks == '4140'
@@ -238,7 +238,7 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[1].quality_level_list[0].sampling_rate == '48000'
                         with Allure.Step("Verify c elements attributes for the second audio track"):
                             assert ismc_object.stream_indexes[1].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '20053333'
+                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '19613333'
 
                             assert not ismc_object.stream_indexes[1].chunk_datas[1].time_start
                             assert ismc_object.stream_indexes[1].chunk_datas[1].duration == '20053334'
@@ -250,7 +250,7 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[0].chunk_datas[2759].duration == '20053334'
 
                             assert not ismc_object.stream_indexes[0].chunk_datas[2760].time_start
-                            assert ismc_object.stream_indexes[0].chunk_datas[2760].duration == '6826667'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2760].duration == '6733333'
 
                     with Allure.Step("Verify StreamIndex attributes for the first video track"):
                         assert ismc_object.stream_indexes[2].chunks == '4147'
@@ -331,8 +331,8 @@ class TestIsmcGeneration:
                         assert len(ismc_object.stream_indexes[0].chunk_datas) == 2761
                         with Allure.Step("Verify c elements attributes for the first audio track"):
                             assert ismc_object.stream_indexes[0].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '20053333'
-                            assert ismc_object.stream_indexes[0].chunk_datas[2760].duration == '6826667'
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '19613333'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2760].duration == '6733333'
 
                     with Allure.Step("Verify StreamIndex attributes for the video track"):
                         assert ismc_object.stream_indexes[5].chunks == '4147'
@@ -406,8 +406,8 @@ class TestIsmcGeneration:
                         assert len(ismc_object.stream_indexes[0].chunk_datas) == 2761
                         with Allure.Step("Verify c elements attributes for the first audio track"):
                             assert ismc_object.stream_indexes[0].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '20053333'
-                            assert ismc_object.stream_indexes[0].chunk_datas[2760].duration == '6826667'
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '19613333'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2760].duration == '6733333'
 
                     with Allure.Step("Verify StreamIndex attributes for the second audio track"):
                         assert ismc_object.stream_indexes[1].chunks == '4140'
@@ -417,8 +417,8 @@ class TestIsmcGeneration:
                         assert len(ismc_object.stream_indexes[1].chunk_datas) == 2761
                         with Allure.Step("Verify c elements attributes for the second audio track"):
                             assert ismc_object.stream_indexes[1].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '20053333'
-                            assert ismc_object.stream_indexes[1].chunk_datas[2760].duration == '6826667'
+                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '19613333'
+                            assert ismc_object.stream_indexes[1].chunk_datas[2760].duration == '6733333'
 
                     with Allure.Step("Verify StreamIndex attributes for the video track"):
                         assert ismc_object.stream_indexes[2].chunks == '4147'
@@ -529,7 +529,7 @@ class TestIsmcGeneration:
                         assert ismc_object.stream_indexes[1].stream_type == 'video'
                         assert ismc_object.stream_indexes[1].url == 'QualityLevels({bitrate})/Fragments(video_0={start time})'
                         assert len(ismc_object.stream_indexes[1].quality_level_list) == 2
-                        assert len(ismc_object.stream_indexes[1].chunk_datas) == 2
+                        assert len(ismc_object.stream_indexes[1].chunk_datas) == 3
                         with Allure.Step("Verify QualityLevel attributes for the video track"):
                             assert ismc_object.stream_indexes[1].quality_level_list[0].bitrate == '153691'
                             assert ismc_object.stream_indexes[1].quality_level_list[
@@ -548,10 +548,12 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[1].quality_level_list[1].max_width == '384'
                         with Allure.Step("Verify c elements attributes for the video track"):
                             assert ismc_object.stream_indexes[1].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '20000000'
-                            assert ismc_object.stream_indexes[1].chunk_datas[0].r == '32'
-                            assert ismc_object.stream_indexes[1].chunk_datas[1].duration == '17200000'
-                            assert ismc_object.stream_indexes[1].chunk_datas[1].r == '1'
+                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '19200000'
+                            assert ismc_object.stream_indexes[1].chunk_datas[0].r == '1'
+                            assert ismc_object.stream_indexes[1].chunk_datas[1].duration == '20000000'
+                            assert ismc_object.stream_indexes[1].chunk_datas[1].r == '31'
+                            assert ismc_object.stream_indexes[1].chunk_datas[2].duration == '17200000'
+                            assert ismc_object.stream_indexes[1].chunk_datas[2].r == '1'
                     with Allure.Step("Verify StreamIndex attributes for the text track"):
                         assert ismc_object.stream_indexes[2].chunks == '8'
                         assert ismc_object.stream_indexes[2].name == 'text_0'
@@ -1286,7 +1288,7 @@ class TestIsmcGeneration:
                         assert ismc_object.stream_indexes[0].stream_type == 'audio'
                         assert ismc_object.stream_indexes[0].url == 'QualityLevels({bitrate})/Fragments(Private Use={start time})'
                         assert len(ismc_object.stream_indexes[0].quality_level_list) == 1
-                        assert len(ismc_object.stream_indexes[0].chunk_datas) == 2
+                        assert len(ismc_object.stream_indexes[0].chunk_datas) == 3
                         with Allure.Step("Verify QualityLevel attributes for the audio track"):
                             assert ismc_object.stream_indexes[0].quality_level_list[0].audio_tag == '255'
                             assert ismc_object.stream_indexes[0].quality_level_list[0].bitrate == '189375'
@@ -1299,10 +1301,12 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[0].quality_level_list[0].sampling_rate == '48000'
                         with Allure.Step("Verify c elements attributes for the audio track"):
                             assert ismc_object.stream_indexes[0].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '38400000'
-                            assert ismc_object.stream_indexes[0].chunk_datas[0].r == '581'
-                            assert ismc_object.stream_indexes[0].chunk_datas[1].duration == '10026667'
-                            assert ismc_object.stream_indexes[0].chunk_datas[1].r == '1'
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '28373333'
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].r == '1'
+                            assert ismc_object.stream_indexes[0].chunk_datas[1].duration == '38400000'
+                            assert ismc_object.stream_indexes[0].chunk_datas[1].r == '580'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2].duration == '10026667'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2].r == '1'
 
                     with Allure.Step("Verify StreamIndex attributes for the video track"):
                         assert ismc_object.stream_indexes[1].chunks == '582'
@@ -1366,7 +1370,7 @@ class TestIsmcGeneration:
                         assert ismc_object.stream_indexes[0].stream_type == 'audio'
                         assert ismc_object.stream_indexes[0].url == 'QualityLevels({bitrate})/Fragments(Dutch={start time})'
                         assert len(ismc_object.stream_indexes[0].quality_level_list) == 1
-                        assert len(ismc_object.stream_indexes[0].chunk_datas) == 2
+                        assert len(ismc_object.stream_indexes[0].chunk_datas) == 3
                         with Allure.Step("Verify QualityLevel attributes for the first audio track"):
                             assert ismc_object.stream_indexes[0].quality_level_list[0].audio_tag == '255'
                             assert ismc_object.stream_indexes[0].quality_level_list[0].bitrate == '38708'
@@ -1379,10 +1383,12 @@ class TestIsmcGeneration:
                             assert ismc_object.stream_indexes[0].quality_level_list[0].sampling_rate == '48000'
                         with Allure.Step("Verify c elements attributes for the first audio track"):
                             assert ismc_object.stream_indexes[0].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '38400000'
-                            assert ismc_object.stream_indexes[0].chunk_datas[0].r == '15'
-                            assert ismc_object.stream_indexes[0].chunk_datas[1].duration == '426667'
-                            assert ismc_object.stream_indexes[0].chunk_datas[1].r == '1'
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].duration == '32510000'
+                            assert ismc_object.stream_indexes[0].chunk_datas[0].r == '1'
+                            assert ismc_object.stream_indexes[0].chunk_datas[1].duration == '38400000'
+                            assert ismc_object.stream_indexes[0].chunk_datas[1].r == '14'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2].duration == '420000'
+                            assert ismc_object.stream_indexes[0].chunk_datas[2].r == '1'
 
                     with Allure.Step("Verify StreamIndex attributes for the second audio track (English)"):
                         assert ismc_object.stream_indexes[1].chunks == '16'
@@ -1392,13 +1398,15 @@ class TestIsmcGeneration:
                         assert ismc_object.stream_indexes[1].stream_type == 'audio'
                         assert ismc_object.stream_indexes[1].url == 'QualityLevels({bitrate})/Fragments(English={start time})'
                         assert len(ismc_object.stream_indexes[1].quality_level_list) == 1
-                        assert len(ismc_object.stream_indexes[1].chunk_datas) == 2
+                        assert len(ismc_object.stream_indexes[1].chunk_datas) == 3
                         with Allure.Step("Verify c elements attributes for the second audio track"):
                             assert ismc_object.stream_indexes[1].chunk_datas[0].time_start == '0'
-                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '38400000'
-                            assert ismc_object.stream_indexes[1].chunk_datas[0].r == '15'
-                            assert ismc_object.stream_indexes[1].chunk_datas[1].duration == '426667'
-                            assert ismc_object.stream_indexes[1].chunk_datas[1].r == '1'
+                            assert ismc_object.stream_indexes[1].chunk_datas[0].duration == '32510000'
+                            assert ismc_object.stream_indexes[1].chunk_datas[0].r == '1'
+                            assert ismc_object.stream_indexes[1].chunk_datas[1].duration == '38400000'
+                            assert ismc_object.stream_indexes[1].chunk_datas[1].r == '14'
+                            assert ismc_object.stream_indexes[1].chunk_datas[2].duration == '420000'
+                            assert ismc_object.stream_indexes[1].chunk_datas[2].r == '1'
 
                     with Allure.Step("Verify StreamIndex attributes for the video track"):
                         assert ismc_object.stream_indexes[2].chunks == '15'

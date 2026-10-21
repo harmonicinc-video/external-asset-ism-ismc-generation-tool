@@ -26,6 +26,9 @@ def resolve_settings(settings: dict) -> dict:
     resolved_settings.setdefault('local_copy', False)
     resolved_settings.setdefault('convert_webvtt', False)
     resolved_settings.setdefault('overwrite_manifest', use_local)
+    resolved_settings.setdefault('align_start_times', True)
+    if not isinstance(resolved_settings['align_start_times'], bool):
+        raise ValueError('align_start_times must be a boolean')
 
     return resolved_settings
 
@@ -76,7 +79,7 @@ def convert_vtt_to_cmft(settings: dict, use_local: bool = False) -> ConversionSu
         return summary
 
 def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
-                        client_manifest_name: str) -> tuple:
+                        client_manifest_name: str, align_start_times: bool = True) -> tuple:
     """
     Generate ISM and ISMC manifest XML content.
     Shared logic used by both Azure and local manifest generation flows.
@@ -86,6 +89,7 @@ def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
         media_data: Parsed media track info and duration
         client_manifest_name: Target filename for the ISMC manifest,
             referenced in the ISM's clientManifestRelativePath field
+        align_start_times: Trim A/V to their common start and emit StreamStartTimestamp
         
     Returns:
         Tuple of (ism_xml_string, ismc_xml_string)
@@ -102,7 +106,8 @@ def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
     ismc_xml_string = IsmcGenerator.generate(
         duration=media_data.media_duration,
         media_track_infos=media_data.media_track_info_list,
-        text_data_info_list=blob_media_data.text_data_info_list
+        text_data_info_list=blob_media_data.text_data_info_list,
+        align_start_times=align_start_times
     )
     return ism_xml_string, ismc_xml_string
 
@@ -184,7 +189,7 @@ def generate_manifests_azure_use(settings: dict) -> ManifestResult:
 
     # Generate both manifests
     ism_xml_string, ismc_xml_string = _generate_manifests(
-        blob_media_data, media_data, client_manifest_name
+        blob_media_data, media_data, client_manifest_name, settings['align_start_times']
     )
 
     # Optionally create local debug copies
@@ -242,7 +247,7 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
 
     # Generate both manifests
     ism_xml_string, ismc_xml_string = _generate_manifests(
-        blob_media_data, media_data, client_manifest_name
+        blob_media_data, media_data, client_manifest_name, settings['align_start_times']
     )
 
     # Write to local directory
@@ -260,8 +265,13 @@ def generate_manifests_local_use(settings: dict) -> ManifestResult:
 
 if __name__ == '__main__':
     settings_from_cli_arguments = CliArgumentsParser.parse()
-    settings_from_config_file = ConfigFileParser.parse()
-    settings = resolve_settings(Common.merge_dicts([settings_from_config_file, settings_from_cli_arguments]))
+    try:
+        settings_from_config_file = ConfigFileParser.parse()
+        settings = resolve_settings(Common.merge_dicts([settings_from_config_file, settings_from_cli_arguments]))
+    except Exception as e:
+        Logger("main").error(f"Configuration failed: {e}")
+        print(f"\nConfiguration failed: {e}")
+        sys.exit(1)
 
     use_local = 'local_directory' in settings and settings['local_directory'] is not None
     

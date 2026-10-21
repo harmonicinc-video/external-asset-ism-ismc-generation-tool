@@ -29,7 +29,8 @@ class StreamIndex(BaseModel):
                  max_width: Optional[str] = None,
                  max_height: Optional[str] = None,
                  display_width: Optional[str] = None,
-                 display_height: Optional[str] = None):
+                 display_height: Optional[str] = None,
+                 stream_start_timestamp: Optional[str] = None):
         self.stream_type = stream_type
         self.chunks = chunks
         self.quality_levels = quality_levels
@@ -40,6 +41,7 @@ class StreamIndex(BaseModel):
         self.display_width = display_width
         self.display_height = display_height
         self.url = url
+        self.stream_start_timestamp = stream_start_timestamp
         self.quality_level_list = []
         self.chunk_datas = []
 
@@ -71,6 +73,8 @@ class StreamIndex(BaseModel):
             stream_index.set("Name", self.name)
         if self.language:
             stream_index.set("Language", self.language)
+        if self.stream_start_timestamp is not None:
+            stream_index.set("StreamStartTimestamp", self.stream_start_timestamp)
         for quality_level in self.quality_level_list:
             if quality_level:
                 stream_index.append(quality_level.to_xml())

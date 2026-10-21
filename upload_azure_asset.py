@@ -18,10 +18,10 @@ ALLOWED_EXTENSIONS = {
 }
 
 # Maximum file size in bytes (default: 1GB)
-MAX_FILE_SIZE = 1 * 1024 * 1024 * 1024
+MAX_FILE_SIZE = 3 * 1024 * 1024 * 1024
 
 # Maximum zip file size in bytes (default: 5GB)
-MAX_ZIP_SIZE = 5 * 1024 * 1024 * 1024
+MAX_ZIP_SIZE = 7 * 1024 * 1024 * 1024
 
 def validate_file_path(file_path: str) -> bool:
     """

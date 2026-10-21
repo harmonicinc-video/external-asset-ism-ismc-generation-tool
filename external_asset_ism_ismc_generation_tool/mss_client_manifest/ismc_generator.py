@@ -30,13 +30,23 @@ class IsmcGenerator:
         cls.__logger = logger
 
     @staticmethod
-    def generate(duration: int, media_track_infos: List[MediaTrackInfo], text_data_info_list: Optional[List[TextDataInfo]] = None) -> str:
+    def generate(duration: int, media_track_infos: List[MediaTrackInfo], text_data_info_list: Optional[List[TextDataInfo]] = None, align_start_times: bool = True) -> str:
+        """Serialize edited track timelines, optionally trimming A/V to a common start.
+
+        Alignment leaves source metadata and subtitle timelines unchanged. The
+        movie duration remains the presentation endpoint, not the retained span.
+        """
         IsmcGenerator.__logger.info('Create client (.ismc) manifest')
 
+        aligned_start = None
+        if align_start_times:
+            aligned_start = max((round(track.start_time * IsmcGenerator.__TIME_SCALE)
+                                 for track in media_track_infos
+                                 if track.track_type in (TrackType.AUDIO, TrackType.VIDEO) and track.chunk_datas), default=0)
         audio_stream_indexes = IsmcGenerator.__get_stream_indexes(
-            media_track_infos, TrackType.AUDIO, IsmcGenerator.__AUDIO_URL_PATTERN)
+            media_track_infos, TrackType.AUDIO, IsmcGenerator.__AUDIO_URL_PATTERN, aligned_start=aligned_start)
         video_stream_indexes = IsmcGenerator.__get_stream_indexes(
-            media_track_infos, TrackType.VIDEO, IsmcGenerator.__VIDEO_URL_PATTERN)
+            media_track_infos, TrackType.VIDEO, IsmcGenerator.__VIDEO_URL_PATTERN, aligned_start=aligned_start)
         text_stream_indexes = IsmcGenerator.__get_stream_indexes(
             media_track_infos, TrackType.TEXT, IsmcGenerator.__TEXT_STREAM_URL_PATTERN, text_data_info_list)
 
@@ -57,7 +67,7 @@ class IsmcGenerator:
 
     @staticmethod
     def __get_stream_indexes(
-            media_track_infos: List[MediaTrackInfo], track_type: TrackType, url_pattern: str, text_data_info_list: Optional[List[TextDataInfo]] = None) -> List[StreamIndex]:
+            media_track_infos: List[MediaTrackInfo], track_type: TrackType, url_pattern: str, text_data_info_list: Optional[List[TextDataInfo]] = None, aligned_start: Optional[int] = None) -> List[StreamIndex]:
         stream_indexes = []
         filtered_tracks = IsmcGenerator.__get_filtered_tracks(media_track_infos, track_type)
         different_stream_index_tracks = IsmcGenerator.__group_tracks_by_chunks(filtered_tracks)
@@ -81,11 +91,14 @@ class IsmcGenerator:
                 quality_levels=str(len(quality_level_list)),
                 url=url,
                 name=name,
-                language=language
+                language=language,
+                stream_start_timestamp=str(aligned_start) if aligned_start is not None else None
             )
 
             IsmcGenerator.__logger.info(f'Track info: {stream_index}')
-            for chunk in IsmcGenerator.__get_chunks(media_track_info=first_track, timescale=IsmcGenerator.__TIME_SCALE):
+            chunks = IsmcGenerator.__get_chunks(media_track_info=first_track, timescale=IsmcGenerator.__TIME_SCALE, aligned_start=aligned_start)
+            stream_index.chunks = str(sum(int(chunk.r) for chunk in chunks))
+            for chunk in chunks:
                 stream_index.add_chunk_data(chunk)
             for quality_level in quality_level_list:
                 IsmcGenerator.__logger.info(f'{track_type.name.capitalize()} track info - quality level: {quality_level}')
@@ -179,18 +192,31 @@ class IsmcGenerator:
         return stream_indexes
 
     @staticmethod
-    def __get_chunks(media_track_info: Optional[MediaTrackInfo] = None, text_stream_timings: Optional[Tuple] = None, timescale: int = 0) -> List[ChunkData]:
+    def __get_chunks(media_track_info: Optional[MediaTrackInfo] = None, text_stream_timings: Optional[Tuple] = None, timescale: int = 0, aligned_start: Optional[int] = None) -> List[ChunkData]:
         c = []
         current_r = 1  # Start with r = 1 for the first chunk
         time_start = 0
         time_start_round = 0
 
         if media_track_info:
-            for index, chunk in enumerate(media_track_info.chunk_datas):
+            stream_start = round(media_track_info.start_time * timescale)
+            trim = max(0, aligned_start - stream_start) if aligned_start is not None else 0
+            if aligned_start is not None:
+                stream_start = aligned_start
+            durations = []
+            # Trim earlier media rather than shifting the surviving segment boundaries.
+            for chunk in media_track_info.chunk_datas:
                 duration = decimal.Decimal(str(chunk * timescale))
+                skipped = min(trim, duration)
+                trim -= skipped
+                if duration > skipped:
+                    durations.append(duration - skipped)
+            if not durations:
+                raise ValueError(f'No media remains at the aligned start for {media_track_info.blob_name}')
 
+            for index, duration in enumerate(durations):
                 if index == 0:
-                    IsmcGenerator.__add_new_chunk(c, duration, time_start, str(current_r))
+                    IsmcGenerator.__add_new_chunk(c, duration, stream_start, str(current_r))
                 else:
                     time_start += c[-1].duration
                     time_start_round += round(c[-1].duration)

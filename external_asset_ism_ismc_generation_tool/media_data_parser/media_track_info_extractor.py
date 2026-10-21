@@ -1,4 +1,5 @@
 from collections import namedtuple
+from fractions import Fraction
 from typing import Tuple
 
 from tools.pymp4.src.pymp4.parser import Box
@@ -56,8 +57,9 @@ class MediaTrackInfoExtractor:
         if self.track_type is not TrackType.TEXT:
             self.track_size = self.stsz_parser.get_track_size()
         self.timescale = self.trak_parser.get_timescale()
-        # For fragmented MP4 files (with moof boxes), duration should be calculated from fragments
-        # For regular MP4 files, calculate from mvhd box
+        self.movie_timescale = mvhd_timescale
+        self.ctts_atom = MediaBoxExtractor.get_mp4_sub_box(stbl_atom, 'ctts')
+        # Prefer the movie duration; fragment sums are the fallback when it is unavailable.
         if mvhd_timescale > 0:
             self.duration = mvhd_duration / mvhd_timescale
         else:
@@ -69,11 +71,38 @@ class MediaTrackInfoExtractor:
     def get_track_info(self, moof_fragments: dict) -> MediaTrackInfo:
         MediaTrackInfoExtractor.__logger.info(f'Get {self.track_type.value} track info from {self.blob_name}')
         if self.track_type == TrackType.VIDEO:
-            return self.__extract_video_track_info(moof_fragments)
+            track_info = self.__extract_video_track_info(moof_fragments)
         elif self.track_type == TrackType.AUDIO:
-            return self.__extract_audio_track_info(moof_fragments)
+            track_info = self.__extract_audio_track_info(moof_fragments)
         elif self.track_type == TrackType.TEXT:
-            return self.__extract_text_track_info(moof_fragments)
+            track_info = self.__extract_text_track_info(moof_fragments)
+        edit_timing = self.trak_parser.get_edit_timing(self.movie_timescale)
+        if edit_timing is not None:
+            empty_duration, media_time, edit_duration = edit_timing
+            composition_start = Fraction(0)
+            # The initial composition delay may already be compensated by media_time.
+            if self.ctts_atom and self.ctts_atom.entries:
+                composition_start = Fraction(self.ctts_atom.entries[0].sample_offset, self.timescale)
+            track_info.start_time = empty_duration + max(Fraction(0), composition_start - media_time)
+            trim = max(Fraction(0), media_time - composition_start)
+            if edit_duration == 0:
+                remaining = sum((Fraction(str(chunk)) for chunk in track_info.chunk_datas), Fraction(0))
+            else:
+                remaining = max(Fraction(0), edit_duration - max(Fraction(0), composition_start - media_time))
+            chunks = []
+            for chunk in track_info.chunk_datas:
+                chunk_duration = Fraction(str(chunk))
+                skipped = min(trim, chunk_duration)
+                trim -= skipped
+                duration = min(chunk_duration - skipped, remaining)
+                if duration > 0:
+                    chunks.append(float(duration))
+                    remaining -= duration
+            if not chunks:
+                raise ValueError(f'Edit list selects no media for {self.blob_name}, track {track_info.track_id}')
+            track_info.chunk_datas = chunks
+            track_info.chunks = len(chunks)
+        return track_info
 
     def __extract_text_track_info(self, moof_fragments: dict) -> MediaTrackInfo:
         if not self.mvex_atom:

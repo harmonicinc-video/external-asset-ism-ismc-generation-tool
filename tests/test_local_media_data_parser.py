@@ -244,6 +244,36 @@ def test_alignment_rejects_nonoverlapping_tracks():
         IsmcGenerator.generate(5, [audio, video])
 
 
+@pytest.mark.parametrize('align', [False, True])
+@pytest.mark.parametrize('track_id,language,chunks,merge_aligned', [
+    (1, 'eng', [1, 2, 2], True),
+    (2, 'eng', [1, 2, 2], False),
+    (1, 'fra', [1, 2, 2], False),
+    (1, 'eng', [2, 1, 2], False),
+])
+def test_renditions_group_by_effective_aligned_timeline(align, track_id, language, chunks, merge_aligned):
+    early = MediaTrackInfo(TrackType.VIDEO, '1000', 1, 3, 'AVC1', [2, 2, 2], 'early.mp4', language='eng')
+    late = MediaTrackInfo(TrackType.VIDEO, '2000', track_id, 3, 'AVC1', chunks, 'late.mp4',
+                          language=language, start_time=1)
+    original_chunks = [list(track.chunk_datas) for track in (early, late)]
+    original_metadata = [vars(track).copy() for track in (early, late)]
+    manifest = ET.fromstring(IsmcGenerator.generate(6, [early, late], align_start_times=align))
+    streams = manifest.findall('StreamIndex')
+    if align and merge_aligned:
+        assert len(streams) == 1
+        assert streams[0].get('QualityLevels') == '2'
+        assert [level.get('Bitrate') for level in streams[0].findall('QualityLevel')] == ['1000', '2000']
+        assert [chunk.attrib for chunk in streams[0].findall('c')] == [
+            {'t': '10000000', 'd': '10000000', 'r': '1'},
+            {'d': '20000000', 'r': '2'},
+        ]
+    else:
+        assert len(streams) == 2
+        assert [stream.get('QualityLevels') for stream in streams] == ['1', '1']
+    assert [vars(track) for track in (early, late)] == original_metadata
+    assert [track.chunk_datas for track in (early, late)] == original_chunks
+
+
 def test_tracks_with_different_presentation_starts_are_not_grouped():
     early = MediaTrackInfo(TrackType.VIDEO, '1000', 1, 1, 'AVC1', [2], 'early.mp4')
     late = MediaTrackInfo(TrackType.VIDEO, '2000', 1, 1, 'AVC1', [2], 'late.mp4', start_time=1)

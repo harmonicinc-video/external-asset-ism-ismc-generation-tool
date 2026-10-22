@@ -1,4 +1,5 @@
 import decimal
+from copy import copy
 import xml.etree.ElementTree as ET
 from itertools import chain
 from typing import Optional, List, Tuple, Dict
@@ -40,9 +41,7 @@ class IsmcGenerator:
 
         aligned_start = None
         if align_start_times:
-            aligned_start = max((round(track.start_time * IsmcGenerator.__TIME_SCALE)
-                                 for track in media_track_infos
-                                 if track.track_type in (TrackType.AUDIO, TrackType.VIDEO) and track.chunk_datas), default=0)
+            aligned_start = IsmcGenerator.__get_aligned_start(media_track_infos)
         audio_stream_indexes = IsmcGenerator.__get_stream_indexes(
             media_track_infos, TrackType.AUDIO, IsmcGenerator.__AUDIO_URL_PATTERN, aligned_start=aligned_start)
         video_stream_indexes = IsmcGenerator.__get_stream_indexes(
@@ -66,11 +65,30 @@ class IsmcGenerator:
         return ET.tostring(xml_ismc, encoding="utf-8", method="xml", xml_declaration=True).decode("utf-8")
 
     @staticmethod
+    def prepare_media_track_infos(media_track_infos: List[MediaTrackInfo], align_start_times: bool = True) -> List[MediaTrackInfo]:
+        """Copy tracks and share audio names within effective aligned timeline groups."""
+        prepared_tracks = [copy(track) for track in media_track_infos]
+        if align_start_times:
+            aligned_start = IsmcGenerator.__get_aligned_start(prepared_tracks)
+            group_names = {}
+            for track in prepared_tracks:
+                if track.track_type == TrackType.AUDIO:
+                    key = IsmcGenerator.__get_aligned_timeline_key(track, aligned_start)
+                    track.track_name = group_names.setdefault(key, track.track_name)
+        return prepared_tracks
+
+    @staticmethod
+    def __get_aligned_start(media_track_infos: List[MediaTrackInfo]) -> int:
+        return max((round(track.start_time * IsmcGenerator.__TIME_SCALE)
+                    for track in media_track_infos
+                    if track.track_type in (TrackType.AUDIO, TrackType.VIDEO) and track.chunk_datas), default=0)
+
+    @staticmethod
     def __get_stream_indexes(
             media_track_infos: List[MediaTrackInfo], track_type: TrackType, url_pattern: str, text_data_info_list: Optional[List[TextDataInfo]] = None, aligned_start: Optional[int] = None) -> List[StreamIndex]:
         stream_indexes = []
         filtered_tracks = IsmcGenerator.__get_filtered_tracks(media_track_infos, track_type)
-        different_stream_index_tracks = IsmcGenerator.__group_tracks_by_chunks(filtered_tracks)
+        different_stream_index_tracks = IsmcGenerator.__group_tracks_by_chunks(filtered_tracks, aligned_start)
 
         for id_tracks, tracks in different_stream_index_tracks.items():
             quality_level_list = IsmcGenerator.__get_quality_levels(tracks)
@@ -128,7 +146,22 @@ class IsmcGenerator:
         return quality_levels
 
     @staticmethod
-    def __group_tracks_by_chunks(tracks: List[MediaTrackInfo]) -> Dict[int, List[MediaTrackInfo]]:
+    def __get_aligned_timeline_key(track: MediaTrackInfo, aligned_start: int) -> Tuple:
+        chunks = IsmcGenerator.__get_chunks(
+            media_track_info=track, timescale=IsmcGenerator.__TIME_SCALE, aligned_start=aligned_start)
+        timeline = tuple((chunk.time_start, round(chunk.duration), int(chunk.r)) for chunk in chunks)
+        return track.track_id, track.language, timeline
+
+    @staticmethod
+    def __group_tracks_by_chunks(tracks: List[MediaTrackInfo], aligned_start: Optional[int] = None) -> Dict[int, List[MediaTrackInfo]]:
+        if aligned_start is not None:
+            timeline_groups = {}
+            for track in tracks:
+                key = IsmcGenerator.__get_aligned_timeline_key(track, aligned_start)
+                group = timeline_groups.setdefault(key, [])
+                if not any(track.is_equal_bitrate(other) for other in group):
+                    group.append(track)
+            return dict(enumerate(timeline_groups.values()))
         different_stream_index_tracks = {}
         id = 0
         for track in tracks:

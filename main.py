@@ -94,9 +94,10 @@ def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
     Returns:
         Tuple of (ism_xml_string, ismc_xml_string)
     """
-    audios = IsmGenerator.get_audios(media_track_infos=media_data.media_track_info_list)
-    videos = IsmGenerator.get_videos(media_track_infos=media_data.media_track_info_list)
-    text_streams = IsmGenerator.get_text_streams(media_data.media_track_info_list, blob_media_data.text_data_info_list)
+    media_track_infos = IsmcGenerator.prepare_media_track_infos(media_data.media_track_info_list, align_start_times)
+    audios = IsmGenerator.get_audios(media_track_infos=media_track_infos)
+    videos = IsmGenerator.get_videos(media_track_infos=media_track_infos)
+    text_streams = IsmGenerator.get_text_streams(media_track_infos, blob_media_data.text_data_info_list)
 
     ism_xml_string = IsmGenerator.generate(
         blob_media_data.manifest_name,
@@ -105,7 +106,7 @@ def _generate_manifests(blob_media_data: BlobMediaData, media_data: MediaData,
     )
     ismc_xml_string = IsmcGenerator.generate(
         duration=media_data.media_duration,
-        media_track_infos=media_data.media_track_info_list,
+        media_track_infos=media_track_infos,
         text_data_info_list=blob_media_data.text_data_info_list,
         align_start_times=align_start_times
     )

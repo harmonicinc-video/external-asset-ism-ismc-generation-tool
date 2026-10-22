@@ -198,6 +198,45 @@ def test_alignment_discards_whole_chunks_and_preserves_remaining_boundaries():
     assert standard.find('StreamIndex/c').attrib == {'t': '0', 'd': '20000000', 'r': '4'}
 
 
+@pytest.mark.parametrize('source_start', [Fraction(0), Fraction(1, 8)])
+@pytest.mark.parametrize('chunk_count,alignment_tick,expected_endpoints', [
+    (4, 20266667, [40533333, 60800000, 81066667]),
+    (4, 60800000, [81066667]),
+    (4, 60800001, [81066667]),
+    (4, 81066666, [81066667]),
+    (4, 81066667, []),
+    (4, 81066668, []),
+    (3, 60800000, []),
+    (3, 60800001, []),
+])
+def test_alignment_uses_rounded_cumulative_boundaries(source_start, chunk_count, alignment_tick, expected_endpoints):
+    timescale = 10000000
+    source_start_tick = round(source_start * timescale)
+    aligned_start = source_start_tick + alignment_tick
+    audio = MediaTrackInfo(TrackType.AUDIO, '1000', 2, chunk_count, 'AACL',
+                           [97280 / 48000] * chunk_count, 'audio.mp4', start_time=source_start)
+    video = MediaTrackInfo(TrackType.VIDEO, '2000', 1, 1, 'AVC1', [2], 'video.mp4',
+                           start_time=Fraction(aligned_start, timescale))
+    if not expected_endpoints:
+        with pytest.raises(ValueError, match='No media remains.*audio.mp4'):
+            IsmcGenerator.generate(12, [audio, video])
+        return
+
+    manifest = ET.fromstring(IsmcGenerator.generate(12, [audio, video]))
+    stream = manifest.find('StreamIndex')
+    assert stream.get('Chunks') == str(len(expected_endpoints))
+    assert stream.find('c').get('t') == str(aligned_start)
+    endpoints = []
+    current_tick = aligned_start
+    for chunk in stream.findall('c'):
+        duration = int(chunk.get('d'))
+        assert duration > 0
+        for repeat_number in range(int(chunk.get('r'))):
+            current_tick += duration
+            endpoints.append(current_tick)
+    assert endpoints == [source_start_tick + endpoint for endpoint in expected_endpoints]
+
+
 def test_alignment_rejects_nonoverlapping_tracks():
     audio = MediaTrackInfo(TrackType.AUDIO, '1000', 2, 1, 'AACL', [2], 'audio.mp4')
     video = MediaTrackInfo(TrackType.VIDEO, '2000', 1, 1, 'AVC1', [2], 'video.mp4', start_time=3)

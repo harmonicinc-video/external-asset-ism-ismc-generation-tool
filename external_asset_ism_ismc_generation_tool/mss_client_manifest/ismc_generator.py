@@ -204,9 +204,16 @@ class IsmcGenerator:
             if aligned_start is not None:
                 stream_start = aligned_start
             durations = []
+            cumulative_duration = decimal.Decimal(0)
+            previous_boundary = 0
             # Trim earlier media rather than shifting the surviving segment boundaries.
             for chunk in media_track_info.chunk_datas:
                 duration = decimal.Decimal(str(chunk * timescale))
+                if aligned_start is not None:
+                    cumulative_duration += duration
+                    boundary = round(cumulative_duration)
+                    duration = decimal.Decimal(boundary - previous_boundary)
+                    previous_boundary = boundary
                 skipped = min(trim, duration)
                 trim -= skipped
                 if duration > skipped:

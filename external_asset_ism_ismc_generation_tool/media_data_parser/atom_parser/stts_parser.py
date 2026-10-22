@@ -1,4 +1,5 @@
 import math
+from fractions import Fraction
 from typing import Optional, List
 
 from tools.pymp4.src.pymp4.parser import Box
@@ -55,15 +56,15 @@ class STTSParser:
         for sample_count, sample_duration in sample_info_list:
             while sample_number <= sample_count:
                 if track_type == TrackType.VIDEO and chunk_duration >= segment_threshold and str(sample_number) in key_frames_numbers:
-                    chunk_durations.append(chunk_duration / timescale)
+                    chunk_durations.append(Fraction(chunk_duration, timescale))
                     chunk_duration = 0
                 elif not is_periodic_video and chunk_duration >= segment_threshold:
-                    chunk_durations.append(chunk_duration / timescale)
+                    chunk_durations.append(Fraction(chunk_duration, timescale))
                     chunk_duration = 0
                 chunk_duration += sample_duration
                 sample_number += 1
 
-        chunk_durations.append(chunk_duration / timescale)
+        chunk_durations.append(Fraction(chunk_duration, timescale))
 
         return chunk_durations
 

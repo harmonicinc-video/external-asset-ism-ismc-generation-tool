@@ -1,4 +1,5 @@
 import math
+from fractions import Fraction
 from typing import Any, Tuple, Dict, List, Union
 from concurrent.futures import ProcessPoolExecutor
 from os import cpu_count
@@ -151,6 +152,7 @@ class MediaDataParser:
 
             except Exception as e:
                 MediaDataParser.__logger.error(f"Error processing blob {blob_name}: {e}")
+                raise ValueError(f"Error processing blob {blob_name}: {e}") from e
 
         media_data.media_track_info_list.sort(key=lambda track: (track.track_id, int(track.bit_rate)))
 
@@ -220,8 +222,7 @@ class MediaDataParser:
         track_id = tfhd_atom.track_ID
         fragment = moof_fragments.setdefault(track_id, [[], []])
         duration = MediaDataParser.__get_moof_fragment_duration(trun_atom, tfhd_atom, trex_atom)
-        duration /= timescale
-        fragment[0].append(duration)
+        fragment[0].append(Fraction(duration, timescale))
         size = MediaDataParser.__get_moof_fragment_size(trun_atom, tfhd_atom, trex_atom)
         fragment[1].append(size)
 
@@ -236,6 +237,7 @@ class MediaDataParser:
         track.index_blob_name = track_index.blob_name
         track.chunks = track_index.chunks
         track.chunk_datas = track_index.chunk_datas
+        track.start_time = track_index.start_time
         track.bit_rate = track_index.bit_rate
         MediaDataParser.__logger.info(f'Changed chunks, bitrate, added index_blob_name {track.index_blob_name} for {track.blob_name} with track_id {track.track_id}')
 
@@ -266,16 +268,21 @@ class MediaDataParser:
         filtered_text_tracks = Common.get_filtered_tracks(media_data.media_track_info_list, TrackType.TEXT)
         
         # Process audio tracks
-        different_audio_tracks_by_quality = Common.group_tracks_by_quality(filtered_audio_tracks)
-        for track in different_audio_tracks_by_quality:
+        audio_group_counts = {}
+        for track in filtered_audio_tracks:
             language_code, language_name = Common.get_language_3_code_and_name(track.language)
             track.language = language_code
-            track.track_name = language_name
-            if track not in track_names_list:
-                index = 0
-            if MediaDataParser.__is_different_track_id_same_language(track, track_names_list):
-                index += 1
-                track.track_name = language_name + str(index)
+            previous_track = track_names_list[-1] if track_names_list else None
+            same_timeline = (previous_track is not None and track.is_equal_language(previous_track)
+                             and track.is_equal_chunk_data(previous_track))
+            if same_timeline and track.is_equal_bitrate(previous_track):
+                continue
+            if same_timeline and track == previous_track:
+                track.track_name = previous_track.track_name
+            else:
+                index = audio_group_counts.get(language_name, 0)
+                track.track_name = language_name + (str(index) if index else '')
+                audio_group_counts[language_name] = index + 1
             track_names_list.append(track)
         
         # Process text tracks (CMFT files from VTT conversion)
@@ -305,10 +312,3 @@ class MediaDataParser:
             text_track_names_list.append(track)
         
         media_data.media_track_info_list = filtered_video_tracks + track_names_list + text_track_names_list
-
-    @staticmethod
-    def __is_different_track_id_same_language(track: MediaTrackInfo, track_names_list: List[MediaTrackInfo]):
-        for other_track in track_names_list:
-            if track.is_different_track_id_same_language(other_track):
-                return True
-        return False

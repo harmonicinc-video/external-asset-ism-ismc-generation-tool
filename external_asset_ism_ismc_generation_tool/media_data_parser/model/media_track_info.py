@@ -41,7 +41,8 @@ class MediaTrackInfo(BaseModel):
                  packet_size: Optional[str] = None,
                  sampling_rate: Optional[str] = None,
                  language: Optional[str] = None,
-                 track_name: Optional[str] = None):
+                 track_name: Optional[str] = None,
+                 start_time=0):
         self.track_type = track_type
         self.bit_rate = bit_rate
         self.track_id = track_id
@@ -60,11 +61,12 @@ class MediaTrackInfo(BaseModel):
         self.sampling_rate = sampling_rate
         self.language = language
         self.track_name = track_name
+        self.start_time = start_time
 
     def is_equal_chunk_data(self, other) -> bool:
         if not other:
             return False
-        return self.chunk_datas == other.chunk_datas
+        return self.chunk_datas == other.chunk_datas and self.start_time == other.start_time
 
     def is_equal_language(self, other) -> bool:
         if not other:

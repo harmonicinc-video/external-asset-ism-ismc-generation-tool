@@ -20,14 +20,13 @@ class CliArgumentsParser:
         argument_parser.add_argument("-asset_zip_name", metavar="asset_zip_name", type=str, help="Name of the asset zip file.")
         argument_parser.add_argument("-local_copy", action="store_true", default=None, help="Create local copy of ISM/ISMC files.")
         argument_parser.add_argument('-local_directory', metavar='local_directory', type=str, help="Local directory containing MP4 files (alternative to Azure)")
-        overwrite_group = argument_parser.add_mutually_exclusive_group()
-        overwrite_group.add_argument(
-            "-overwrite_manifest", dest="overwrite_manifest", action="store_true", default=None,
-            help="Overwrite the canonical ISM and ISMC manifest pair."
-        )
-        overwrite_group.add_argument(
-            "-no_overwrite_manifest", dest="overwrite_manifest", action="store_false",
+        argument_parser.add_argument(
+            "-no_overwrite_manifest", dest="overwrite_manifest", action="store_false", default=None,
             help="Preserve existing manifests and generate a suffixed pair."
+        )
+        argument_parser.add_argument(
+            "-no_align_start_times", dest="align_start_times", action="store_false", default=None,
+            help="Preserve the individual MP4 edit-list presentation starts."
         )
         return argument_parser
 

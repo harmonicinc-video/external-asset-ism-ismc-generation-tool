@@ -1,4 +1,5 @@
 import math
+from fractions import Fraction
 from typing import Any, Tuple, Dict, List, Union
 from concurrent.futures import ProcessPoolExecutor
 from os import cpu_count
@@ -221,8 +222,7 @@ class MediaDataParser:
         track_id = tfhd_atom.track_ID
         fragment = moof_fragments.setdefault(track_id, [[], []])
         duration = MediaDataParser.__get_moof_fragment_duration(trun_atom, tfhd_atom, trex_atom)
-        duration /= timescale
-        fragment[0].append(duration)
+        fragment[0].append(Fraction(duration, timescale))
         size = MediaDataParser.__get_moof_fragment_size(trun_atom, tfhd_atom, trex_atom)
         fragment[1].append(size)
 

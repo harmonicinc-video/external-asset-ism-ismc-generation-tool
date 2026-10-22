@@ -20,6 +20,8 @@ from external_asset_ism_ismc_generation_tool.media_data_parser.local_media_data_
 from external_asset_ism_ismc_generation_tool.media_data_parser.media_file_data_reader import MediaFileDataReader
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.atom.atom_type import AtomType
 from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.trak_parser import TRAKParser
+from external_asset_ism_ismc_generation_tool.media_data_parser.atom_parser.stts_parser import STTSParser
+from external_asset_ism_ismc_generation_tool.media_data_parser.media_data_parser import MediaDataParser
 from external_asset_ism_ismc_generation_tool.media_data_parser.media_track_info_extractor import MediaTrackInfoExtractor
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.media_track_info import MediaTrackInfo
 from external_asset_ism_ismc_generation_tool.media_data_parser.model.track_type import TrackType
@@ -92,6 +94,45 @@ def test_edit_list_maps_track_timeline(track_type, media_time, empty_duration,
     assert result.chunks == len(expected_chunks)
     manifest = ET.fromstring(IsmcGenerator.generate(12, [result], align_start_times=False))
     assert manifest.find('StreamIndex/c').get('t') == str(round(expected_start * 10000000))
+
+
+@pytest.mark.parametrize('source', ['stts', 'moof'])
+@pytest.mark.parametrize('align', [False, True])
+@pytest.mark.parametrize('timescale,chunk_ticks,media_time,edit_duration', [
+    (48000, 102400, Fraction(0), Fraction(32, 5)),
+    (44100, 89088, Fraction(89088, 44100), Fraction(0)),
+])
+def test_edit_list_exact_chunk_boundaries(timescale, chunk_ticks, media_time, edit_duration, source, align):
+    if source == 'stts':
+        stts = STTSParser({'entries': [SimpleNamespace(sample_count=4 * (chunk_ticks // 1024), sample_delta=1024)]})
+        chunks = stts.get_chunk_durations_from_stts(
+            TrackType.AUDIO, timescale, segment_duration_ticks=chunk_ticks)
+    else:
+        fragments = {}
+        tfhd = SimpleNamespace(track_ID=1)
+        trun = SimpleNamespace(sample_info=[SimpleNamespace(sample_duration=chunk_ticks, sample_size=1000)])
+        for fragment_number in range(4):
+            MediaDataParser._MediaDataParser__fill_moof_fragment(fragments, tfhd, trun, None, timescale)
+        chunks = fragments[1][0]
+
+    extractor = MediaTrackInfoExtractor.__new__(MediaTrackInfoExtractor)
+    extractor.trak_parser = SimpleNamespace(
+        get_edit_timing=lambda timescale: (Fraction(0), media_time, edit_duration))
+    extractor.movie_timescale = 1000
+    extractor.ctts_atom = None
+    extractor.track_type = TrackType.AUDIO
+    extractor.blob_name = 'exact-boundary.mp4'
+    track = MediaTrackInfo(TrackType.AUDIO, '1000', 1, len(chunks), 'AACL', chunks, extractor.blob_name)
+    extractor._MediaTrackInfoExtractor__extract_audio_track_info = lambda fragments: track
+
+    result = extractor.get_track_info({})
+    assert result.chunks == 3
+    assert chunks == [Fraction(chunk_ticks, timescale)] * 4
+    assert result.chunk_datas == [float(Fraction(chunk_ticks, timescale))] * 3
+    manifest = ET.fromstring(IsmcGenerator.generate(10, [result], align_start_times=align))
+    stream = manifest.find('StreamIndex')
+    assert stream.get('Chunks') == '3'
+    assert all(int(chunk.get('d')) > 0 for chunk in stream.findall('c'))
 
 
 def test_edit_list_rejects_a_media_start_beyond_the_track():

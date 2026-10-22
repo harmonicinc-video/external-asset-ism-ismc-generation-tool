@@ -86,22 +86,23 @@ class MediaTrackInfoExtractor:
             track_info.start_time = empty_duration + max(Fraction(0), composition_start - media_time)
             trim = max(Fraction(0), media_time - composition_start)
             if edit_duration == 0:
-                remaining = sum((Fraction(str(chunk)) for chunk in track_info.chunk_datas), Fraction(0))
+                remaining = sum(track_info.chunk_datas, Fraction(0))
             else:
                 remaining = max(Fraction(0), edit_duration - max(Fraction(0), composition_start - media_time))
             chunks = []
             for chunk in track_info.chunk_datas:
-                chunk_duration = Fraction(str(chunk))
+                chunk_duration = chunk if isinstance(chunk, Fraction) else Fraction(str(chunk))
                 skipped = min(trim, chunk_duration)
                 trim -= skipped
                 duration = min(chunk_duration - skipped, remaining)
                 if duration > 0:
-                    chunks.append(float(duration))
+                    chunks.append(duration)
                     remaining -= duration
             if not chunks:
                 raise ValueError(f'Edit list selects no media for {self.blob_name}, track {track_info.track_id}')
             track_info.chunk_datas = chunks
             track_info.chunks = len(chunks)
+        track_info.chunk_datas = [float(chunk) for chunk in track_info.chunk_datas]
         return track_info
 
     def __extract_text_track_info(self, moof_fragments: dict) -> MediaTrackInfo:

@@ -12,19 +12,14 @@
 - **Write unit tests for every object.** Each class, struct, trait implementation, or public module must have corresponding unit tests. Tests are not an afterthought — they are part of the implementation, not a follow-up task.
 - **Write comments for an international audience.** Use simple, clear English. No idioms, no slang, no redundancy. One short sentence max. If a well-named identifier already explains the intent, don't add a comment.
 - **Line width.** 150–200 characters is fine — don't wrap lines artificially short. In multi-line comments, break at the end of each sentence rather than trying to make all lines the same length.
-- **Code Formatting**: Ensure your code adheres to the auto-formatting configuration included in the devcontainer.
-- **Linting**: Resolve all linting issues automatically detected in the devcontainer.
+- **Code Formatting**: standard, no auto-formatting done.
 - **Backward Compatibility**: Avoid introducing breaking changes to
-  - database schemas
-  - structure of object storage
-  - flatbuffer schema of objects stored in object storage
-  - REST API
-  - formats of NATS message or KV store values
+  - general API
+  - generated ISM
 
 ## Testing
 
 - Run all unit tests to verify the correctness of your changes.
-- Execute end-to-end (e2e) tests to ensure the system behaves as expected.
 
 ## Definition of Done
 

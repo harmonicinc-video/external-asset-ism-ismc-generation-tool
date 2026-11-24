@@ -1,4 +1,4 @@
-azure-core==1.29.4
+azure-core==1.38.0
 azure-storage-blob==12.8.1
 azure-identity==1.14.1
 construct==2.8.8
